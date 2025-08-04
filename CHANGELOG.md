@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2025-08-04
 
+## [1.0.0] - 2025-08-04
+
 ### Added
 
 - Initial release of Nx Code Coverage Action
@@ -45,3 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - This is a test release
+
+## [1.0.2] - 2025-08-04
+
+### Fixed
+
+- Fixed a bug where the release action was not working as expected
