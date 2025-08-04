@@ -1,0 +1,76 @@
+name: 'Nx Code Coverage Reporter'
+description: 'A comprehensive coverage reporter for Nx monorepos with enhanced features'
+author: 'Matloob Altaf'
+branding:
+  icon: 'bar-chart-2'
+  color: 'green'
+
+inputs:
+  github-token:
+    description: 'GitHub token for posting comments'
+    required: true
+    default: ${{ github.token }}
+  
+  coverage-folder:
+    description: 'Path to the coverage folder containing nested directories with coverage files'
+    required: true
+    default: './coverage'
+  
+  coverage-base-folder:
+    description: 'Path to the base coverage folder for comparison (optional)'
+    required: false
+    default: ''
+  
+  no-coverage-ran:
+    description: 'Set to true if no coverage was generated (skips processing)'
+    required: false
+    default: 'false'
+  
+  hide-coverage-reports:
+    description: 'Hide detailed coverage reports in comments'
+    required: false
+    default: 'false'
+  
+  hide-unchanged:
+    description: 'Hide unchanged files in coverage diff'
+    required: false
+    default: 'false'
+  
+  minimum-coverage:
+    description: 'Minimum coverage percentage required (fails if below this)'
+    required: false
+    default: '0'
+  
+  comment-title:
+    description: 'Title for the coverage comment'
+    required: false
+    default: 'Coverage Report'
+  
+  update-comment:
+    description: 'Update existing comment instead of creating new one'
+    required: false
+    default: 'true'
+  
+  include-summary:
+    description: 'Include coverage summary in comment'
+    required: false
+    default: 'true'
+  
+  working-directory:
+    description: 'Working directory for the action'
+    required: false
+    default: './'
+
+outputs:
+  total-coverage:
+    description: 'Total coverage percentage'
+  
+  coverage-changed:
+    description: 'Whether coverage changed compared to base'
+  
+  coverage-diff:
+    description: 'Coverage difference from base (+ or - percentage)'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

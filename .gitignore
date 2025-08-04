@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.log
+.env
+.DS_Store
+coverage/
+*.tgz
+*.tar.gz
+.nyc_output
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
