@@ -5,9 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-01-XX
+## [1.0.0] - 2025-08-04
 
 ### Added
+
 - Initial release of Nx Code Coverage Action
 - Comprehensive coverage reporter for Nx monorepos
 - Support for nested directory structures (Nx monorepos)
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detailed documentation and examples
 
 ### Features
+
 - 🏗️ **Nx Monorepo Support**: Automatically discovers coverage from nested directories
 - 📊 **Multiple Formats**: Supports both LCOV and JSON summary formats
 - 🔄 **Coverage Comparison**: Compare with base branch coverage
@@ -30,9 +32,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🧹 **Clean Reports**: Hide unchanged files when needed
 
 ### Technical Details
+
 - Built with Node.js 20
 - Uses GitHub Actions toolkit
 - Supports glob patterns for file discovery
 - Robust error handling and logging
 - Comprehensive test suite with Jest
 - ESLint and Prettier for code quality
+
+## [1.0.1] - 2025-08-04
+
+### Added
+
+- This is a test release
