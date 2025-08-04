@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MatloobAltaf/nx-code-coverage.git"
+    "url": "git@github.com:MatloobAltaf/nx-code-coverage.git"
   },
   "keywords": [
     "github-actions",
