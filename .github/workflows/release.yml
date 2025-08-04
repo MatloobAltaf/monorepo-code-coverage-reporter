@@ -8,10 +8,12 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -28,6 +30,22 @@ jobs:
       - name: Build action
         run: npm run build
 
+      - name: Package action
+        run: |
+          # Configure git
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          # Remove dist from gitignore temporarily and add built files
+          sed -i '/^dist\/$/d' .gitignore
+          git add dist/ .gitignore
+
+          # Commit if there are changes
+          if ! git diff --staged --quiet; then
+            git commit -m "Package action for ${{ github.ref_name }}"
+            git push origin HEAD:${{ github.ref_name }} --force
+          fi
+
       - name: Create Release
         uses: actions/create-release@v1
         env:
@@ -37,13 +55,13 @@ jobs:
           release_name: Release ${{ github.ref }}
           body: |
             ## Changes
-            
+
             See [CHANGELOG.md](CHANGELOG.md) for details.
-            
+
             ## Usage
-            
+
             ```yaml
-            - uses: your-username/nx-code-coverage@${{ github.ref }}
+            - uses: MatloobAltaf/nx-code-coverage@${{ github.ref }}
               with:
                 github-token: ${{ secrets.GITHUB_TOKEN }}
                 coverage-folder: './coverage'
