@@ -1,5 +1,4 @@
 const fs = require('fs');
-const path = require('path');
 const { parseCoverage, compareCoverage } = require('../coverage-parser');
 
 // Mock fs and glob
@@ -8,7 +7,7 @@ jest.mock('glob');
 jest.mock('lcov-parse');
 
 const mockFs = fs;
-const mockGlob = require('glob');
+const { glob: mockGlob } = require('glob');
 const mockLcovParse = require('lcov-parse');
 
 describe('coverage-parser', () => {
@@ -27,12 +26,13 @@ describe('coverage-parser', () => {
 
     it('should parse JSON summary files correctly', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockGlob.mockImplementation((pattern, options, callback) => {
+      mockGlob.mockImplementation(async (pattern, _options) => {
         if (pattern.includes('lcov.info')) {
-          callback(null, []);
+          return [];
         } else if (pattern.includes('coverage-summary.json')) {
-          callback(null, ['/coverage/apps/frontend/coverage-summary.json']);
+          return ['/coverage/apps/frontend/coverage-summary.json'];
         }
+        return [];
       });
 
       const mockJsonData = {
@@ -57,12 +57,13 @@ describe('coverage-parser', () => {
 
     it('should handle LCOV files correctly', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockGlob.mockImplementation((pattern, options, callback) => {
+      mockGlob.mockImplementation(async (pattern, _options) => {
         if (pattern.includes('lcov.info')) {
-          callback(null, ['/coverage/apps/backend/lcov.info']);
+          return ['/coverage/apps/backend/lcov.info'];
         } else if (pattern.includes('coverage-summary.json')) {
-          callback(null, []);
+          return [];
         }
+        return [];
       });
 
       const mockLcovData = [
