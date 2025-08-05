@@ -26,7 +26,7 @@ If you're using **Jest**, add or update your `jest.config.js` to include:
 module.exports = {
   collectCoverage: true,
   coverageReporters: ['json-summary', 'text']
-}
+};
 ```
 
 ### ✅ NYC (Istanbul) Setup
@@ -91,20 +91,18 @@ The action extracts the `total` field for generating coverage reports and compar
 
 ## Inputs
 
-| Input                   | Description                                     | Required | Default               |
-| ----------------------- | ----------------------------------------------- | -------- | --------------------- |
-| `github-token`          | GitHub token for posting comments               | Yes      | `${{ github.token }}` |
-| `coverage-folder`       | Path to coverage folder with nested directories | Yes      | `'./coverage'`        |
-| `coverage-base-folder`  | Path to base coverage folder for comparison     | No       | `''`                  |
-| `no-coverage-ran`       | Set to true if no coverage was generated        | No       | `'false'`             |
-| `hide-coverage-reports` | Hide detailed coverage reports in comments      | No       | `'false'`             |
-| `hide-unchanged`        | Hide unchanged files in coverage diff           | No       | `'false'`             |
-
-| `comment-title` | Title for the coverage comment | No | `'Coverage Report'` |
-| `update-comment` | Update existing comment instead of creating new | No | `'true'` |
-| `include-summary` | Include coverage summary in comment | No | `'true'` |
-| `working-directory` | Working directory for the action | No | `'./'` |
-| `detailed-coverage` | Show detailed coverage breakdown with individual app/lib metrics | No | `'true'` |
+| Input                   | Description                                                      | Required | Default               |
+| ----------------------- | ---------------------------------------------------------------- | -------- | --------------------- |
+| `github-token`          | GitHub token for posting comments                                | Yes      | `${{ github.token }}` |
+| `coverage-folder`       | Path to coverage folder with nested directories                  | Yes      | `'./coverage'`        |
+| `coverage-base-folder`  | Path to base coverage folder for comparison                      | No       | `''`                  |
+| `no-coverage-ran`       | Set to true if no coverage was generated                         | No       | `'false'`             |
+| `hide-coverage-reports` | Hide detailed coverage reports in comments                       | No       | `'false'`             |
+| `hide-unchanged`        | Hide unchanged files in coverage diff                            | No       | `'false'`             |
+| `comment-title`         | Title for the coverage comment                                   | No       | `''`                  |
+| `update-comment`        | Update existing comment instead of creating new                  | No       | `'true'`              |
+| `include-summary`       | Include coverage summary in comment                              | No       | `'true'`              |
+| `detailed-coverage`     | Show detailed coverage breakdown with individual app/lib metrics | No       | `'true'`              |
 
 ## Outputs
 

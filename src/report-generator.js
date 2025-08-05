@@ -17,7 +17,7 @@ function generateReport(options) {
     detailedCoverage = true
   } = options;
 
-  let report = `## ${commentTitle}\n\n`;
+  let report = `## ${commentTitle || 'Coverage Report'}\n\n`;
 
   // Add summary if requested
   if (includeSummary) {

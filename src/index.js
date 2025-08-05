@@ -2,7 +2,6 @@ const core = require('@actions/core');
 const github = require('@actions/github');
 const fs = require('fs');
 const path = require('path');
-const glob = require('glob');
 const { parseCoverage } = require('./coverage-parser');
 const { generateReport } = require('./report-generator');
 const { postComment, updateComment, findExistingComment } = require('./comment-handler');
@@ -20,13 +19,7 @@ async function run() {
     const commentTitle = core.getInput('comment-title') || 'Coverage Report';
     const updateCommentFlag = core.getInput('update-comment') === 'true';
     const includeSummary = core.getInput('include-summary') === 'true';
-    const workingDirectory = core.getInput('working-directory') || './';
     const detailedCoverage = core.getInput('detailed-coverage') === 'true';
-
-    // Change to working directory
-    if (workingDirectory !== './') {
-      process.chdir(workingDirectory);
-    }
 
     // Skip if no coverage ran
     if (noCoverageRan) {
@@ -43,7 +36,42 @@ async function run() {
 
     // Parse current coverage
     core.info(`Parsing coverage from: ${coverageFolder}`);
+
+    // Debug: List files in coverage directory
+    if (fs.existsSync(coverageFolder)) {
+      core.info(`Coverage folder exists: ${coverageFolder}`);
+      const listFilesRecursively = (dir, prefix = '') => {
+        try {
+          const items = fs.readdirSync(dir);
+          items.forEach((item) => {
+            const fullPath = path.join(dir, item);
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+              core.info(`${prefix}📁 ${item}/`);
+              listFilesRecursively(fullPath, prefix + '  ');
+            } else {
+              core.info(`${prefix}📄 ${item}`);
+            }
+          });
+        } catch (error) {
+          core.warning(`Failed to list files in ${dir}: ${error.message}`);
+        }
+      };
+
+      core.info('Files in coverage directory:');
+      listFilesRecursively(coverageFolder);
+    } else {
+      core.warning(`Coverage folder does not exist: ${coverageFolder}`);
+    }
+
     const currentCoverage = await parseCoverage(coverageFolder);
+
+    // Debug: Log parsed projects
+    core.info(`Total projects parsed: ${Object.keys(currentCoverage).length}`);
+    Object.keys(currentCoverage).forEach((project) => {
+      const coverage = currentCoverage[project].summary.lines?.pct || 'N/A';
+      core.info(`  - ${project}: ${coverage}% lines coverage`);
+    });
 
     if (!currentCoverage || Object.keys(currentCoverage).length === 0) {
       throw new Error(`No coverage data found in ${coverageFolder}`);
@@ -112,7 +140,7 @@ function calculateTotalCoverage(coverage) {
   let totalLines = 0;
   let coveredLines = 0;
 
-  for (const [projectName, projectData] of Object.entries(coverage)) {
+  for (const [, projectData] of Object.entries(coverage)) {
     if (projectData.summary) {
       totalLines += projectData.summary.lines?.total || 0;
       coveredLines += projectData.summary.lines?.covered || 0;
