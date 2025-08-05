@@ -63,7 +63,7 @@ jobs:
             ## Usage
 
             ```yaml
-            - uses: MatloobAltaf/nx-code-coverage@${{ github.ref_name }}
+            - uses: MatloobAltaf/monorepo-code-coverage-reporter@${{ github.ref_name }}
               with:
                 github-token: ${{ secrets.GITHUB_TOKEN }}
                 coverage-folder: './coverage'
