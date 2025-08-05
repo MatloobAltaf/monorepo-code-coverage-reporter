@@ -1,24 +1,88 @@
-# Nx Code Coverage Action
+# Monorepo Code Coverage Reporter
 
-A comprehensive coverage reporter for Nx monorepos. This GitHub Action processes coverage data from nested directories, supports both LCOV and JSON summary formats, provides base coverage comparison, and generates comprehensive coverage reports with diff visualization.
+A comprehensive coverage reporter for monorepos. This GitHub Action processes coverage data from nested directories, supports JSON summary format, provides base coverage comparison, and generates comprehensive coverage reports with diff visualization.
 
 ## Features
 
-- 🏗️ **Nx Monorepo Support**: Automatically discovers and processes coverage from nested directories (apps/, libs/, etc.)
+- 🏗️ **Monorepo Support**: Automatically discovers and processes coverage from nested directories (apps/, libs/, etc.)
 - 📊 **Individual App/Lib Coverage**: Detailed coverage breakdown for each application and library with diff tracking
 - 📋 **Enhanced Metrics**: Shows lines, functions, branches, and statements coverage with actual counts
 - 🔄 **Coverage Comparison**: Compare current coverage with base branch coverage to show diffs
 - 💬 **Smart Comments**: Creates or updates PR comments with coverage reports
 - 📈 **Diff Visualization**: Shows coverage changes with emojis and clear indicators
-- 📁 **Multiple Formats**: Supports both LCOV (.info) and JSON summary files
+- 📁 **JSON Summary Format**: Supports standard coverage-summary.json files
 - ⚙️ **Configurable**: Extensive configuration options for customization
 - 🧹 **Clean Reports**: Hide unchanged files and detailed reports when needed
+
+## 📋 Prerequisites
+
+This Action requires `coverage-summary.json` files generated from your test suite. Most JavaScript/TypeScript projects can produce this using tools like Jest or `nyc` (Istanbul).
+
+### ✅ Jest Setup
+
+If you're using **Jest**, add or update your `jest.config.js` to include:
+
+```js
+module.exports = {
+  collectCoverage: true,
+  coverageReporters: ['json-summary', 'text']
+}
+```
+
+### ✅ NYC (Istanbul) Setup
+
+If you're using **nyc** (Istanbul), ensure your configuration generates JSON summary reports:
+
+```js
+// .nycrc or package.json
+{
+  "reporter": ["text", "json-summary"],
+  "report-dir": "./coverage"
+}
+```
+
+### ✅ Coverage Directory Structure
+
+Ensure your coverage files are organized in a nested directory structure typical of Nx monorepos:
+
+```
+coverage/
+├── apps/
+│   ├── frontend/
+│   │   └── coverage-summary.json
+│   └── backend/
+│       └── coverage-summary.json
+├── libs/
+│   ├── shared/
+│   │   └── coverage-summary.json
+│   └── utils/
+│       └── coverage-summary.json
+└── libraries-coverage/
+    └── coverage-summary.json
+```
+
+### ✅ Coverage File Format
+
+Each `coverage-summary.json` file should contain a `total` field with aggregated coverage data:
+
+```json
+{
+  "total": {
+    "lines": { "total": 100, "covered": 85, "skipped": 0, "pct": 85 },
+    "statements": { "total": 120, "covered": 102, "skipped": 0, "pct": 85 },
+    "functions": { "total": 30, "covered": 24, "skipped": 0, "pct": 80 },
+    "branches": { "total": 50, "covered": 35, "skipped": 0, "pct": 70 }
+  }
+}
+```
+
+The action extracts the `total` field for generating coverage reports and comparisons. Individual file coverage data is ignored.
 
 ## Quick Start
 
 ```yaml
 - name: Coverage Report
-  uses: your-username/nx-code-coverage@v1
+  uses: your-username/monorepo-code-coverage-reporter@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
@@ -55,8 +119,8 @@ A comprehensive coverage reporter for Nx monorepos. This GitHub Action processes
 ### Basic Usage
 
 ```yaml
-- name: Generate coverage report
-  uses: your-username/nx-code-coverage@v1
+      - name: Generate coverage report
+        uses: your-username/monorepo-code-coverage-reporter@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
@@ -115,7 +179,7 @@ jobs:
           path: ./coverage-base
 
       - name: Generate Coverage Report
-        uses: your-username/nx-code-coverage@v1
+        uses: your-username/monorepo-code-coverage-reporter@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           coverage-folder: './coverage'
@@ -129,7 +193,7 @@ jobs:
 
 ```yaml
 - name: Advanced Coverage Report
-  uses: your-username/nx-code-coverage@v1
+  uses: your-username/monorepo-code-coverage-reporter@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
@@ -156,7 +220,7 @@ jobs:
     fi
 
 - name: Generate Coverage Report
-  uses: your-username/nx-code-coverage@v1
+  uses: your-username/monorepo-code-coverage-reporter@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
@@ -165,49 +229,11 @@ jobs:
 
 ## Expected Directory Structure
 
-The action expects coverage files to be organized in a nested directory structure, typical of Nx monorepos:
+The action expects coverage files to be organized in a nested directory structure, typical of Nx monorepos. See the [Prerequisites](#-prerequisites) section above for the required directory structure and setup instructions.
 
-```
-coverage/
-├── apps/
-│   ├── frontend/
-│   │   ├── lcov.info
-│   │   └── coverage-summary.json
-│   └── backend/
-│       ├── lcov.info
-│       └── coverage-summary.json
-├── libs/
-│   ├── shared/
-│   │   ├── lcov.info
-│   │   └── coverage-summary.json
-│   └── utils/
-│       ├── lcov.info
-│       └── coverage-summary.json
-└── libraries-coverage/
-    ├── lcov.info
-    └── coverage-summary.json
-```
+## Supported Coverage Format
 
-## Supported Coverage Formats
-
-### LCOV Format (`lcov.info`)
-
-Standard LCOV format generated by tools like Jest, Karma, etc.
-
-### JSON Summary Format (`coverage-summary.json`)
-
-JSON format with the following structure:
-
-```json
-{
-  "total": {
-    "lines": { "total": 100, "covered": 85, "pct": 85 },
-    "functions": { "total": 20, "covered": 18, "pct": 90 },
-    "statements": { "total": 100, "covered": 85, "pct": 85 },
-    "branches": { "total": 50, "covered": 40, "pct": 80 }
-  }
-}
-```
+The action uses the standard `coverage-summary.json` format generated by tools like Jest, NYC, and other coverage tools. See the [Prerequisites](#-prerequisites) section above for detailed format specifications and setup instructions.
 
 ## Coverage Report Features
 
@@ -303,4 +329,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Support
 
-If you encounter any issues or have questions, please [open an issue](https://github.com/your-username/nx-code-coverage/issues) on GitHub.
+If you encounter any issues or have questions, please [open an issue](https://github.com/your-username/monorepo-code-coverage-reporter/issues) on GitHub.

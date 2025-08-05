@@ -1,14 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const { glob } = require('glob');
-const lcovParse = require('lcov-parse');
-const { promisify } = require('util');
-
-const lcovParseAsync = promisify(lcovParse);
 
 /**
  * Parse coverage data from a directory containing nested coverage files
- * Supports both LCOV (.info) and JSON summary files
+ * Supports JSON summary files (coverage-summary.json)
  * @param {string} coverageFolder - Path to coverage folder
  * @returns {Object} Parsed coverage data organized by project
  */
@@ -19,42 +15,29 @@ async function parseCoverage(coverageFolder) {
     throw new Error(`Coverage folder not found: ${coverageFolder}`);
   }
 
-  // Find all coverage files recursively
-  const lcovFiles = await glob(`${coverageFolder}/**/lcov.info`, { absolute: true });
-  const jsonFiles = await glob(`${coverageFolder}/**/coverage-summary.json`, { absolute: true });
-
-  // Parse LCOV files
-  for (const lcovFile of lcovFiles) {
-    const projectPath = getProjectPathFromFile(lcovFile, coverageFolder);
-    const projectName = getProjectName(projectPath);
-
-    try {
-      const lcovData = await lcovParseAsync(lcovFile);
-      coverage[projectName] = {
-        ...coverage[projectName],
-        lcov: lcovData,
-        summary: calculateSummaryFromLcov(lcovData),
-        path: projectPath
-      };
-    } catch (error) {
-      console.warn(`Failed to parse LCOV file ${lcovFile}: ${error.message}`);
-    }
-  }
+  // Find all coverage-summary.json files recursively
+  const jsonSummaryFiles = await glob(`${coverageFolder}/**/coverage-summary.json`, {
+    absolute: true
+  });
 
   // Parse JSON summary files
-  for (const jsonFile of jsonFiles) {
+  for (const jsonFile of jsonSummaryFiles) {
     const projectPath = getProjectPathFromFile(jsonFile, coverageFolder);
     const projectName = getProjectName(projectPath);
 
     try {
       const jsonData = JSON.parse(fs.readFileSync(jsonFile, 'utf8'));
+
+      // Extract the total summary from coverage-summary.json
+      // The file contains a 'total' field with aggregated coverage data
+      const summary = jsonData.total || jsonData;
+
       coverage[projectName] = {
-        ...coverage[projectName],
-        summary: jsonData.total || jsonData,
+        summary: summary,
         path: projectPath
       };
     } catch (error) {
-      console.warn(`Failed to parse JSON file ${jsonFile}: ${error.message}`);
+      console.warn(`Failed to parse JSON summary file ${jsonFile}: ${error.message}`);
     }
   }
 
@@ -89,51 +72,6 @@ function getProjectName(projectPath) {
   }
 
   return parts[parts.length - 1] || 'unknown';
-}
-
-/**
- * Calculate summary from LCOV data
- * @param {Array} lcovData - Parsed LCOV data
- * @returns {Object} Coverage summary
- */
-function calculateSummaryFromLcov(lcovData) {
-  const summary = {
-    lines: { total: 0, covered: 0, pct: 0 },
-    functions: { total: 0, covered: 0, pct: 0 },
-    statements: { total: 0, covered: 0, pct: 0 },
-    branches: { total: 0, covered: 0, pct: 0 }
-  };
-
-  for (const file of lcovData) {
-    // Lines
-    if (file.lines && file.lines.details) {
-      summary.lines.total += file.lines.found || 0;
-      summary.lines.covered += file.lines.hit || 0;
-    }
-
-    // Functions
-    if (file.functions && file.functions.details) {
-      summary.functions.total += file.functions.found || 0;
-      summary.functions.covered += file.functions.hit || 0;
-    }
-
-    // Branches
-    if (file.branches && file.branches.details) {
-      summary.branches.total += file.branches.found || 0;
-      summary.branches.covered += file.branches.hit || 0;
-    }
-  }
-
-  // Calculate percentages
-  summary.lines.pct =
-    summary.lines.total > 0 ? (summary.lines.covered / summary.lines.total) * 100 : 0;
-  summary.functions.pct =
-    summary.functions.total > 0 ? (summary.functions.covered / summary.functions.total) * 100 : 0;
-  summary.branches.pct =
-    summary.branches.total > 0 ? (summary.branches.covered / summary.branches.total) * 100 : 0;
-  summary.statements.pct = summary.lines.pct; // Use lines as statements for LCOV
-
-  return summary;
 }
 
 /**
@@ -190,6 +128,5 @@ function compareCoverage(current, base) {
 
 module.exports = {
   parseCoverage,
-  compareCoverage,
-  calculateSummaryFromLcov
+  compareCoverage
 };

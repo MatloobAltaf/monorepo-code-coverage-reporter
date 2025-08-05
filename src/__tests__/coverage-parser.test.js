@@ -4,11 +4,9 @@ const { parseCoverage, compareCoverage } = require('../coverage-parser');
 // Mock fs and glob
 jest.mock('fs');
 jest.mock('glob');
-jest.mock('lcov-parse');
 
 const mockFs = fs;
 const { glob: mockGlob } = require('glob');
-const mockLcovParse = require('lcov-parse');
 
 describe('coverage-parser', () => {
   beforeEach(() => {
@@ -27,9 +25,7 @@ describe('coverage-parser', () => {
     it('should parse JSON summary files correctly', async () => {
       mockFs.existsSync.mockReturnValue(true);
       mockGlob.mockImplementation(async (pattern, _options) => {
-        if (pattern.includes('lcov.info')) {
-          return [];
-        } else if (pattern.includes('coverage-summary.json')) {
+        if (pattern.includes('coverage-summary.json')) {
           return ['/coverage/apps/frontend/coverage-summary.json'];
         }
         return [];
@@ -37,9 +33,10 @@ describe('coverage-parser', () => {
 
       const mockJsonData = {
         total: {
-          lines: { total: 100, covered: 85, pct: 85 },
-          functions: { total: 20, covered: 18, pct: 90 },
-          branches: { total: 50, covered: 40, pct: 80 }
+          lines: { total: 100, covered: 85, skipped: 0, pct: 85 },
+          statements: { total: 120, covered: 102, skipped: 0, pct: 85 },
+          functions: { total: 20, covered: 18, skipped: 0, pct: 90 },
+          branches: { total: 50, covered: 40, skipped: 0, pct: 80 }
         }
       };
 
@@ -55,36 +52,42 @@ describe('coverage-parser', () => {
       });
     });
 
-    it('should handle LCOV files correctly', async () => {
+    it('should handle multiple projects correctly', async () => {
       mockFs.existsSync.mockReturnValue(true);
       mockGlob.mockImplementation(async (pattern, _options) => {
-        if (pattern.includes('lcov.info')) {
-          return ['/coverage/apps/backend/lcov.info'];
-        } else if (pattern.includes('coverage-summary.json')) {
-          return [];
+        if (pattern.includes('coverage-summary.json')) {
+          return [
+            '/coverage/apps/backend/coverage-summary.json',
+            '/coverage/apps/transect/coverage-summary.json',
+            '/coverage/libraries-coverage/coverage-summary.json'
+          ];
         }
         return [];
       });
 
-      const mockLcovData = [
-        {
-          file: 'src/app.js',
-          lines: { found: 50, hit: 45, details: [] },
-          functions: { found: 10, hit: 9, details: [] },
-          branches: { found: 20, hit: 16, details: [] }
+      const mockJsonData = {
+        total: {
+          lines: { total: 100, covered: 85, skipped: 0, pct: 85 },
+          statements: { total: 120, covered: 102, skipped: 0, pct: 85 },
+          functions: { total: 20, covered: 18, skipped: 0, pct: 90 },
+          branches: { total: 50, covered: 40, skipped: 0, pct: 80 }
         }
-      ];
+      };
 
-      mockLcovParse.mockImplementation((file, callback) => {
-        callback(null, mockLcovData);
-      });
+      mockFs.readFileSync.mockReturnValue(JSON.stringify(mockJsonData));
 
       const result = await parseCoverage('/coverage');
 
+      // Verify all three projects are parsed
       expect(result['apps/backend']).toBeDefined();
-      expect(result['apps/backend'].lcov).toEqual(mockLcovData);
-      expect(result['apps/backend'].summary.lines.total).toBe(50);
-      expect(result['apps/backend'].summary.lines.covered).toBe(45);
+      expect(result['apps/transect']).toBeDefined();
+      expect(result['libraries-coverage']).toBeDefined();
+
+      // Verify each project has correct coverage data
+      ['apps/backend', 'apps/transect', 'libraries-coverage'].forEach((project) => {
+        expect(result[project].summary).toEqual(mockJsonData.total);
+        expect(result[project].path).toBeDefined();
+      });
     });
   });
 

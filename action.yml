@@ -1,5 +1,5 @@
-name: 'Nx Code Coverage Reporter'
-description: 'A comprehensive coverage reporter for Nx monorepos with enhanced features'
+name: 'Monorepo Code Coverage Reporter'
+description: 'A comprehensive coverage reporter for monorepos with enhanced features'
 author: 'Matloob Altaf'
 branding:
   icon: 'bar-chart-2'

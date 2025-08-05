@@ -1,6 +1,6 @@
 # Installation Guide
 
-This guide will help you set up and use the Nx Code Coverage Action in your repository.
+This guide will help you set up and use the Monorepo Code Coverage Reporter in your repository.
 
 ## Quick Setup
 
@@ -10,7 +10,7 @@ Add the action to your workflow:
 
 ```yaml
 - name: Generate coverage report
-  uses: your-username/nx-code-coverage@v1
+  uses: your-username/monorepo-code-coverage-reporter@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
@@ -38,14 +38,11 @@ Organize your coverage files in a nested directory structure:
 coverage/
 ├── apps/
 │   ├── frontend/
-│   │   ├── lcov.info
 │   │   └── coverage-summary.json
 │   └── backend/
-│       ├── lcov.info
 │       └── coverage-summary.json
 └── libs/
     └── shared/
-        ├── lcov.info
         └── coverage-summary.json
 ```
 
@@ -64,7 +61,7 @@ coverage/
     path: ./coverage-base
 
 - name: Generate coverage report
-  uses: your-username/nx-code-coverage@v1
+  uses: your-username/monorepo-code-coverage-reporter@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
@@ -77,7 +74,7 @@ coverage/
 
 ```yaml
 - name: Generate coverage report
-  uses: your-username/nx-code-coverage@v1
+  uses: your-username/monorepo-code-coverage-reporter@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
@@ -96,14 +93,14 @@ coverage/
 
 1. **No coverage files found**
    - Verify your coverage files are in the expected locations
-   - Check that files are named correctly (`lcov.info` or `coverage-summary.json`)
+   - Check that files are named correctly (`coverage-summary.json`)
 
 2. **Permission denied errors**
    - Ensure your workflow has `pull-requests: write` permission
    - Check that the GitHub token has sufficient permissions
 
 3. **Coverage parsing errors**
-   - Verify LCOV and JSON files are properly formatted
+   - Verify JSON files are properly formatted
    - Check the action logs for specific parsing errors
 
 ### Getting Help
