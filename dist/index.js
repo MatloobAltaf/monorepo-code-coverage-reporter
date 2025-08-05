@@ -40781,7 +40781,7 @@ async function run() {
     const noCoverageRan = core.getInput('no-coverage-ran') === 'true';
     const hideCoverageReports = core.getInput('hide-coverage-reports') === 'true';
     const hideUnchanged = core.getInput('hide-unchanged') === 'true';
-    const minimumCoverage = parseFloat(core.getInput('minimum-coverage') || '0');
+
     const commentTitle = core.getInput('comment-title') || 'Coverage Report';
     const updateCommentFlag = core.getInput('update-comment') === 'true';
     const includeSummary = core.getInput('include-summary') === 'true';
@@ -40838,10 +40838,7 @@ async function run() {
       core.setOutput('coverage-diff', coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2));
     }
 
-    // Check minimum coverage
-    if (totalCoverage < minimumCoverage) {
-      core.setFailed(`Coverage ${totalCoverage.toFixed(2)}% is below minimum required ${minimumCoverage}%`);
-    }
+
 
     // Generate report for PR comments
     if (github.context.eventName === 'pull_request') {

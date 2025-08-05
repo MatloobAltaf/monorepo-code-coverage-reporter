@@ -168,7 +168,7 @@ jobs:
           coverage-base-folder: './coverage-base'
           hide-coverage-reports: true
           hide-unchanged: true
-          minimum-coverage: 80
+
           comment-title: 'Code Coverage Report'
 
       - name: Upload coverage for future diffs - transect app

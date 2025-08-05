@@ -26,8 +26,8 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write  # Required for commenting on PRs
-      contents: read        # Required for reading repository content
+      pull-requests: write # Required for commenting on PRs
+      contents: read # Required for reading repository content
 ```
 
 ### 3. Prepare Coverage Data
@@ -69,7 +69,7 @@ coverage/
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
     coverage-base-folder: './coverage-base'
-    minimum-coverage: 80
+
     hide-unchanged: true
 ```
 
@@ -82,7 +82,7 @@ coverage/
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
     coverage-base-folder: './coverage-base'
-    minimum-coverage: 85
+
     comment-title: '📊 Test Coverage Report'
     hide-coverage-reports: false
     hide-unchanged: true
@@ -124,5 +124,5 @@ If you encounter issues:
 - [ ] Verify coverage file structure
 - [ ] Test the action on a pull request
 - [ ] Configure base coverage comparison (optional)
-- [ ] Set minimum coverage threshold (optional)
+
 - [ ] Customize report appearance (optional)
