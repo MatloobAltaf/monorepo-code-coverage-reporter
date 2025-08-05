@@ -5,7 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-08-04
+## [1.1.0] - 2025-01-27
+
+### Added
+
+- Enhanced status column showing overall coverage trend (⬆️ Increased/⬇️ Decreased/➖ Unchanged) instead of generic "Changed"
+- Professional icon set replacing emoji-heavy approach for better cross-platform compatibility
+- More intuitive visual indicators using arrows and symbols
+
+### Improved
+
+- Coverage report accuracy by fixing statement coverage diff calculations
+- Report clarity by removing confusing "Project removed" sections for projects without current coverage
+- Icon consistency across all report sections using professional symbols:
+  - ⬆️/⬇️ for trend indicators (replacing 📈/📉)
+  - ➖ for neutral/no change (replacing ➡️)
+  - 🔄 for change sections (replacing 📊)
+  - ➕ for additions (replacing 🆕)
+  - 🔹 for new values (replacing ✨)
+  - 📑 for detailed sections (replacing 📋)
+
+### Fixed
+
+- Statement coverage diff now uses proper statements calculation instead of lines diff
+- Comparison logic now only processes projects with current coverage data
+- Filtering logic properly considers all coverage metrics (lines, functions, branches, statements)
+- Linting errors and unused variables cleaned up
+
+### Changed
+
+- Status column now displays meaningful coverage trend information
+- Reports focus only on projects with actual coverage changes
+- More professional appearance suitable for corporate environments
 
 ## [1.0.0] - 2025-08-04
 

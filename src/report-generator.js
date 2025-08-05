@@ -54,7 +54,7 @@ function generateSummary(currentCoverage, baseCoverage, totalCoverage) {
   if (baseCoverage) {
     const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
     const diff = totalCoverage - baseTotalCoverage;
-    const emoji = diff > 0 ? '📈' : diff < 0 ? '📉' : '➡️';
+    const emoji = diff > 0 ? '⬆️' : diff < 0 ? '⬇️' : '➖';
     const sign = diff > 0 ? '+' : '';
 
     summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${baseTotalCoverage.toFixed(2)}%)\n\n`;
@@ -79,7 +79,7 @@ function generateComparisonReport(
 ) {
   const diff = compareCoverage(currentCoverage, baseCoverage);
 
-  let report = '### 📊 Individual App/Library Coverage Changes\n\n';
+  let report = '### 🔄 Individual App/Library Coverage Changes\n\n';
 
   if (detailedCoverage) {
     report +=
@@ -102,7 +102,8 @@ function generateComparisonReport(
       projectDiff.status === 'modified' &&
       Math.abs(projectDiff.diff.lines) < 0.01 &&
       Math.abs(projectDiff.diff.functions) < 0.01 &&
-      Math.abs(projectDiff.diff.branches) < 0.01
+      Math.abs(projectDiff.diff.branches) < 0.01 &&
+      Math.abs(projectDiff.diff.statements || 0) < 0.01
     ) {
       continue;
     }
@@ -140,23 +141,16 @@ function generateComparisonReport(
  * @returns {string} Table row markdown
  */
 function generateProjectRow(projectName, projectDiff) {
-  const { status, current, base, diff } = projectDiff;
+  const { status, current, diff } = projectDiff;
 
   let linesCell, functionsCell, branchesCell, statusCell;
 
   switch (status) {
     case 'added':
-      linesCell = `${formatPercentage(current.lines?.pct)} ✨`;
-      functionsCell = `${formatPercentage(current.functions?.pct)} ✨`;
-      branchesCell = `${formatPercentage(current.branches?.pct)} ✨`;
-      statusCell = '🆕 Added';
-      break;
-
-    case 'removed':
-      linesCell = `~~${formatPercentage(base.lines?.pct)}~~ ❌`;
-      functionsCell = `~~${formatPercentage(base.functions?.pct)}~~ ❌`;
-      branchesCell = `~~${formatPercentage(base.branches?.pct)}~~ ❌`;
-      statusCell = '🗑️ Removed';
+      linesCell = `${formatPercentage(current.lines?.pct)} 🔹`;
+      functionsCell = `${formatPercentage(current.functions?.pct)} 🔹`;
+      branchesCell = `${formatPercentage(current.branches?.pct)} 🔹`;
+      statusCell = '➕ Added';
       break;
 
     case 'modified': {
@@ -164,11 +158,12 @@ function generateProjectRow(projectName, projectDiff) {
       functionsCell = formatDiffCell(current.functions?.pct, diff.functions);
       branchesCell = formatDiffCell(current.branches?.pct, diff.branches);
 
-      const hasSignificantChange =
-        Math.abs(diff.lines) >= 0.01 ||
-        Math.abs(diff.functions) >= 0.01 ||
-        Math.abs(diff.branches) >= 0.01;
-      statusCell = hasSignificantChange ? '📊 Changed' : '➡️ Unchanged';
+      // Show overall coverage trend based on lines coverage (most comprehensive metric)
+      if (Math.abs(diff.lines) >= 0.01) {
+        statusCell = diff.lines > 0 ? '⬆️ Increased' : '⬇️ Decreased';
+      } else {
+        statusCell = '➖ Unchanged';
+      }
       break;
     }
 
@@ -192,32 +187,25 @@ function generateEnhancedProjectRow(projectName, projectDiff) {
 
   switch (status) {
     case 'added':
-      linesCell = `${formatPercentage(current.lines?.pct)} ✨<br/><small>${current.lines?.covered || 0}/${current.lines?.total || 0}</small>`;
-      functionsCell = `${formatPercentage(current.functions?.pct)} ✨<br/><small>${current.functions?.covered || 0}/${current.functions?.total || 0}</small>`;
-      branchesCell = `${formatPercentage(current.branches?.pct)} ✨<br/><small>${current.branches?.covered || 0}/${current.branches?.total || 0}</small>`;
-      statementsCell = `${formatPercentage(current.statements?.pct)} ✨<br/><small>${current.statements?.covered || 0}/${current.statements?.total || 0}</small>`;
-      statusCell = '🆕 Added';
-      break;
-
-    case 'removed':
-      linesCell = `~~${formatPercentage(base.lines?.pct)}~~ ❌<br/><small>~~${base.lines?.covered || 0}/${base.lines?.total || 0}~~</small>`;
-      functionsCell = `~~${formatPercentage(base.functions?.pct)}~~ ❌<br/><small>~~${base.functions?.covered || 0}/${base.functions?.total || 0}~~</small>`;
-      branchesCell = `~~${formatPercentage(base.branches?.pct)}~~ ❌<br/><small>~~${base.branches?.covered || 0}/${base.branches?.total || 0}~~</small>`;
-      statementsCell = `~~${formatPercentage(base.statements?.pct)}~~ ❌<br/><small>~~${base.statements?.covered || 0}/${base.statements?.total || 0}~~</small>`;
-      statusCell = '🗑️ Removed';
+      linesCell = `${formatPercentage(current.lines?.pct)} 🔹<br/><small>${current.lines?.covered || 0}/${current.lines?.total || 0}</small>`;
+      functionsCell = `${formatPercentage(current.functions?.pct)} 🔹<br/><small>${current.functions?.covered || 0}/${current.functions?.total || 0}</small>`;
+      branchesCell = `${formatPercentage(current.branches?.pct)} 🔹<br/><small>${current.branches?.covered || 0}/${current.branches?.total || 0}</small>`;
+      statementsCell = `${formatPercentage(current.statements?.pct)} 🔹<br/><small>${current.statements?.covered || 0}/${current.statements?.total || 0}</small>`;
+      statusCell = '➕ Added';
       break;
 
     case 'modified': {
       linesCell = formatEnhancedDiffCell(current.lines, base.lines, diff.lines);
       functionsCell = formatEnhancedDiffCell(current.functions, base.functions, diff.functions);
       branchesCell = formatEnhancedDiffCell(current.branches, base.branches, diff.branches);
-      statementsCell = formatEnhancedDiffCell(current.statements, base.statements, diff.lines); // Use lines diff for statements
+      statementsCell = formatEnhancedDiffCell(current.statements, base.statements, diff.statements); // Use statements diff for statements
 
-      const hasSignificantChange =
-        Math.abs(diff.lines) >= 0.01 ||
-        Math.abs(diff.functions) >= 0.01 ||
-        Math.abs(diff.branches) >= 0.01;
-      statusCell = hasSignificantChange ? '📊 Changed' : '➡️ Unchanged';
+      // Show overall coverage trend based on lines coverage (most comprehensive metric)
+      if (Math.abs(diff.lines) >= 0.01) {
+        statusCell = diff.lines > 0 ? '⬆️ Increased' : '⬇️ Decreased';
+      } else {
+        statusCell = '➖ Unchanged';
+      }
       break;
     }
 
@@ -242,7 +230,7 @@ function formatDiffCell(current, diff) {
   }
 
   const sign = diff > 0 ? '+' : '';
-  const emoji = diff > 0 ? '📈' : '📉';
+  const emoji = diff > 0 ? '⬆️' : '⬇️';
   return `${currentFormatted} (${sign}${diff.toFixed(2)}%) ${emoji}`;
 }
 
@@ -266,7 +254,7 @@ function formatEnhancedDiffCell(current, base, diff) {
   }
 
   const sign = diff > 0 ? '+' : '';
-  const emoji = diff > 0 ? '📈' : '📉';
+  const emoji = diff > 0 ? '⬆️' : '⬇️';
   return `${currentFormatted} (${sign}${diff.toFixed(2)}%) ${emoji}<br/>${coverageDetails}`;
 }
 
@@ -277,14 +265,15 @@ function formatEnhancedDiffCell(current, base, diff) {
  * @returns {string} Detailed breakdown markdown
  */
 function generateDetailedBreakdown(diff, hideUnchanged) {
-  let breakdown = '### 📋 Detailed Coverage Breakdown\n\n';
+  let breakdown = '### 📑 Detailed Coverage Breakdown\n\n';
 
   const changedProjects = Object.entries(diff).filter(([_, projectDiff]) => {
     if (hideUnchanged && projectDiff.status === 'modified') {
       return (
         Math.abs(projectDiff.diff.lines) >= 0.01 ||
         Math.abs(projectDiff.diff.functions) >= 0.01 ||
-        Math.abs(projectDiff.diff.branches) >= 0.01
+        Math.abs(projectDiff.diff.branches) >= 0.01 ||
+        Math.abs(projectDiff.diff.statements || 0) >= 0.01
       );
     }
     return projectDiff.status !== 'modified' || !hideUnchanged;
@@ -315,50 +304,44 @@ function generateProjectBreakdown(projectName, projectDiff) {
 
   switch (status) {
     case 'added':
-      breakdown += '🆕 **New project added**\n';
+      breakdown += '➕ **New project added**\n';
       breakdown += `- **Lines:** ${formatPercentage(current.lines?.pct)} (${current.lines?.covered || 0}/${current.lines?.total || 0})\n`;
       breakdown += `- **Functions:** ${formatPercentage(current.functions?.pct)} (${current.functions?.covered || 0}/${current.functions?.total || 0})\n`;
       breakdown += `- **Branches:** ${formatPercentage(current.branches?.pct)} (${current.branches?.covered || 0}/${current.branches?.total || 0})\n`;
-      break;
-
-    case 'removed':
-      breakdown += '🗑️ **Project removed**\n';
-      breakdown += `- **Previous Lines:** ${formatPercentage(base.lines?.pct)} (${base.lines?.covered || 0}/${base.lines?.total || 0})\n`;
-      breakdown += `- **Previous Functions:** ${formatPercentage(base.functions?.pct)} (${base.functions?.covered || 0}/${base.functions?.total || 0})\n`;
-      breakdown += `- **Previous Branches:** ${formatPercentage(base.branches?.pct)} (${base.branches?.covered || 0}/${base.branches?.total || 0})\n`;
       break;
 
     case 'modified': {
       const hasSignificantChange =
         Math.abs(diff.lines) >= 0.01 ||
         Math.abs(diff.functions) >= 0.01 ||
-        Math.abs(diff.branches) >= 0.01;
+        Math.abs(diff.branches) >= 0.01 ||
+        Math.abs(diff.statements || 0) >= 0.01;
 
       if (hasSignificantChange) {
-        breakdown += '📊 **Coverage changes detected**\n';
+        breakdown += '🔄 **Coverage changes detected**\n';
         if (Math.abs(diff.lines) >= 0.01) {
-          const emoji = diff.lines > 0 ? '📈' : '📉';
+          const emoji = diff.lines > 0 ? '⬆️' : '⬇️';
           const sign = diff.lines > 0 ? '+' : '';
           breakdown += `- **Lines:** ${formatPercentage(current.lines?.pct)} (${sign}${diff.lines.toFixed(2)}%) ${emoji}\n`;
           breakdown += `  - Current: ${current.lines?.covered || 0}/${current.lines?.total || 0}\n`;
           breakdown += `  - Previous: ${base.lines?.covered || 0}/${base.lines?.total || 0}\n`;
         }
         if (Math.abs(diff.functions) >= 0.01) {
-          const emoji = diff.functions > 0 ? '📈' : '📉';
+          const emoji = diff.functions > 0 ? '⬆️' : '⬇️';
           const sign = diff.functions > 0 ? '+' : '';
           breakdown += `- **Functions:** ${formatPercentage(current.functions?.pct)} (${sign}${diff.functions.toFixed(2)}%) ${emoji}\n`;
           breakdown += `  - Current: ${current.functions?.covered || 0}/${current.functions?.total || 0}\n`;
           breakdown += `  - Previous: ${base.functions?.covered || 0}/${base.functions?.total || 0}\n`;
         }
         if (Math.abs(diff.branches) >= 0.01) {
-          const emoji = diff.branches > 0 ? '📈' : '📉';
+          const emoji = diff.branches > 0 ? '⬆️' : '⬇️';
           const sign = diff.branches > 0 ? '+' : '';
           breakdown += `- **Branches:** ${formatPercentage(current.branches?.pct)} (${sign}${diff.branches.toFixed(2)}%) ${emoji}\n`;
           breakdown += `  - Current: ${current.branches?.covered || 0}/${current.branches?.total || 0}\n`;
           breakdown += `  - Previous: ${base.branches?.covered || 0}/${base.branches?.total || 0}\n`;
         }
       } else {
-        breakdown += '➡️ **No significant changes**\n';
+        breakdown += '➖ **No significant changes**\n';
         breakdown += `- **Lines:** ${formatPercentage(current.lines?.pct)} (${current.lines?.covered || 0}/${current.lines?.total || 0})\n`;
         breakdown += `- **Functions:** ${formatPercentage(current.functions?.pct)} (${current.functions?.covered || 0}/${current.functions?.total || 0})\n`;
         breakdown += `- **Branches:** ${formatPercentage(current.branches?.pct)} (${current.branches?.covered || 0}/${current.branches?.total || 0})\n`;
@@ -378,7 +361,7 @@ function generateProjectBreakdown(projectName, projectDiff) {
  * @returns {string} Coverage table markdown
  */
 function generateCoverageTable(coverage, detailedCoverage = true) {
-  let report = '### 📊 Individual App/Library Coverage\n\n';
+  let report = '### 🔄 Individual App/Library Coverage\n\n';
 
   if (detailedCoverage) {
     report +=
@@ -429,7 +412,7 @@ function generateCoverageTable(coverage, detailedCoverage = true) {
  * @returns {string} Individual project details markdown
  */
 function generateIndividualProjectDetails(coverage) {
-  let details = '### 📋 Individual Project Details\n\n';
+  let details = '### 📑 Individual Project Details\n\n';
 
   const sortedProjects = Object.keys(coverage).sort();
 

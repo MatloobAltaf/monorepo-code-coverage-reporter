@@ -145,21 +145,16 @@ function calculateSummaryFromLcov(lcovData) {
 function compareCoverage(current, base) {
   const diff = {};
 
-  // Get all project names from both current and base
-  const allProjects = new Set([...Object.keys(current || {}), ...Object.keys(base || {})]);
+  // Only process projects that have current coverage data
+  // Skip projects that exist only in base coverage to avoid confusing "removed" status
+  const currentProjects = Object.keys(current || {});
 
-  for (const projectName of allProjects) {
+  for (const projectName of currentProjects) {
     const currentProject = current[projectName];
-    const baseProject = base[projectName];
+    const baseProject = base ? base[projectName] : null;
 
-    if (!currentProject && baseProject) {
-      // Project removed
-      diff[projectName] = {
-        status: 'removed',
-        base: baseProject.summary
-      };
-    } else if (currentProject && !baseProject) {
-      // Project added
+    if (currentProject && !baseProject) {
+      // Project added (new coverage)
       diff[projectName] = {
         status: 'added',
         current: currentProject.summary
@@ -172,6 +167,9 @@ function compareCoverage(current, base) {
       const lineDiff = (currentSummary.lines?.pct || 0) - (baseSummary.lines?.pct || 0);
       const functionDiff = (currentSummary.functions?.pct || 0) - (baseSummary.functions?.pct || 0);
       const branchDiff = (currentSummary.branches?.pct || 0) - (baseSummary.branches?.pct || 0);
+      const statementsDiff =
+        (currentSummary.statements?.pct || currentSummary.lines?.pct || 0) -
+        (baseSummary.statements?.pct || baseSummary.lines?.pct || 0);
 
       diff[projectName] = {
         status: 'modified',
@@ -180,7 +178,8 @@ function compareCoverage(current, base) {
         diff: {
           lines: lineDiff,
           functions: functionDiff,
-          branches: branchDiff
+          branches: branchDiff,
+          statements: statementsDiff
         }
       };
     }

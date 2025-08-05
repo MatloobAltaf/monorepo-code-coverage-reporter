@@ -103,7 +103,7 @@ describe('coverage-parser', () => {
       expect(result['apps/frontend'].current).toEqual(current['apps/frontend'].summary);
     });
 
-    it('should detect removed projects', () => {
+    it('should skip removed projects (projects only in base coverage)', () => {
       const current = {};
       const base = {
         'apps/backend': {
@@ -113,8 +113,9 @@ describe('coverage-parser', () => {
 
       const result = compareCoverage(current, base);
 
-      expect(result['apps/backend'].status).toBe('removed');
-      expect(result['apps/backend'].base).toEqual(base['apps/backend'].summary);
+      // Should not include removed projects in the result
+      expect(result['apps/backend']).toBeUndefined();
+      expect(Object.keys(result)).toHaveLength(0);
     });
 
     it('should calculate diffs for modified projects', () => {
