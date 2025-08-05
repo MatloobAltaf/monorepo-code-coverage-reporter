@@ -5,12 +5,13 @@ A comprehensive coverage reporter for Nx monorepos. This GitHub Action processes
 ## Features
 
 - 🏗️ **Nx Monorepo Support**: Automatically discovers and processes coverage from nested directories (apps/, libs/, etc.)
-- 📊 **Multiple Formats**: Supports both LCOV (.info) and JSON summary files
+- 📊 **Individual App/Lib Coverage**: Detailed coverage breakdown for each application and library with diff tracking
+- 📋 **Enhanced Metrics**: Shows lines, functions, branches, and statements coverage with actual counts
 - 🔄 **Coverage Comparison**: Compare current coverage with base branch coverage to show diffs
 - 💬 **Smart Comments**: Creates or updates PR comments with coverage reports
 - 📈 **Diff Visualization**: Shows coverage changes with emojis and clear indicators
+- 📁 **Multiple Formats**: Supports both LCOV (.info) and JSON summary files
 - ⚙️ **Configurable**: Extensive configuration options for customization
-
 - 🧹 **Clean Reports**: Hide unchanged files and detailed reports when needed
 
 ## Quick Start
@@ -39,6 +40,7 @@ A comprehensive coverage reporter for Nx monorepos. This GitHub Action processes
 | `update-comment` | Update existing comment instead of creating new | No | `'true'` |
 | `include-summary` | Include coverage summary in comment | No | `'true'` |
 | `working-directory` | Working directory for the action | No | `'./'` |
+| `detailed-coverage` | Show detailed coverage breakdown with individual app/lib metrics | No | `'true'` |
 
 ## Outputs
 

@@ -21,6 +21,7 @@ async function run() {
     const updateCommentFlag = core.getInput('update-comment') === 'true';
     const includeSummary = core.getInput('include-summary') === 'true';
     const workingDirectory = core.getInput('working-directory') || './';
+    const detailedCoverage = core.getInput('detailed-coverage') === 'true';
 
     // Change to working directory
     if (workingDirectory !== './') {
@@ -85,7 +86,8 @@ async function run() {
         commentTitle,
         hideCoverageReports,
         hideUnchanged,
-        includeSummary
+        includeSummary,
+        detailedCoverage
       });
 
       const octokit = github.getOctokit(token);

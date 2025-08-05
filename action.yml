@@ -56,6 +56,11 @@ inputs:
     required: false
     default: './'
 
+  detailed-coverage:
+    description: 'Show detailed coverage breakdown with individual app/lib metrics'
+    required: false
+    default: 'true'
+
 outputs:
   total-coverage:
     description: 'Total coverage percentage'

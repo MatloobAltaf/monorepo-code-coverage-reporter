@@ -59,3 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Added dist folder to the release
+
+## [1.0.4] - 2025-08-05
+
+### Added
+
+- Modified report generation logic to include detailed coverage
+- Update message ui
+
+### Tests
+
+- Added tests for the report generator
