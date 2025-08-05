@@ -30360,8 +30360,7 @@ const path = __nccwpck_require__(6928);
 const { glob } = __nccwpck_require__(1363);
 
 /**
- * Parse coverage data from a directory containing nested coverage files
- * Supports JSON summary files (coverage-summary.json)
+ * Parse coverage data from a directory containing nested coverage-summary.json files
  * @param {string} coverageFolder - Path to coverage folder
  * @returns {Object} Parsed coverage data organized by project
  */
@@ -30413,7 +30412,7 @@ function getProjectPathFromFile(filePath, coverageFolder) {
 }
 
 /**
- * Get project name from project path
+ * Get project name from project path - use the full relative path as the name
  * @param {string} projectPath - Project path
  * @returns {string} Project name
  */
@@ -30422,13 +30421,9 @@ function getProjectName(projectPath) {
     return 'root';
   }
 
-  // For Nx structure like apps/frontend or libs/shared
-  const parts = projectPath.split(path.sep);
-  if (parts.length >= 2) {
-    return `${parts[0]}/${parts[1]}`;
-  }
-
-  return parts[parts.length - 1] || 'unknown';
+  // Use the full relative path as the project name
+  // This will create names like "apps/transect", "apps/backend", "library", "xyz/abc/qw"
+  return projectPath;
 }
 
 /**
@@ -30683,10 +30678,10 @@ function generateEnhancedProjectRow(projectName, projectDiff) {
 
   switch (status) {
     case 'added':
-      linesCell = `${formatPercentage(current.lines?.pct)} 🔹<br/><small>${current.lines?.covered || 0}/${current.lines?.total || 0}</small>`;
-      functionsCell = `${formatPercentage(current.functions?.pct)} 🔹<br/><small>${current.functions?.covered || 0}/${current.functions?.total || 0}</small>`;
-      branchesCell = `${formatPercentage(current.branches?.pct)} 🔹<br/><small>${current.branches?.covered || 0}/${current.branches?.total || 0}</small>`;
-      statementsCell = `${formatPercentage(current.statements?.pct)} 🔹<br/><small>${current.statements?.covered || 0}/${current.statements?.total || 0}</small>`;
+      linesCell = `${formatPercentage(current.lines?.pct)} 🔹\n*${current.lines?.covered || 0}/${current.lines?.total || 0}*`;
+      functionsCell = `${formatPercentage(current.functions?.pct)} 🔹\n*${current.functions?.covered || 0}/${current.functions?.total || 0}*`;
+      branchesCell = `${formatPercentage(current.branches?.pct)} 🔹\n*${current.branches?.covered || 0}/${current.branches?.total || 0}*`;
+      statementsCell = `${formatPercentage(current.statements?.pct)} 🔹\n*${current.statements?.covered || 0}/${current.statements?.total || 0}*`;
       statusCell = '➕ Added';
       break;
 
@@ -30743,15 +30738,15 @@ function formatEnhancedDiffCell(current, base, diff) {
   const currentTotal = current?.total || 0;
 
   const currentFormatted = formatPercentage(currentPct);
-  const coverageDetails = `<small>${currentCovered}/${currentTotal}</small>`;
+  const coverageDetails = `*${currentCovered}/${currentTotal}*`;
 
   if (Math.abs(diff) < 0.01) {
-    return `${currentFormatted}<br/>${coverageDetails}`;
+    return `${currentFormatted}\n${coverageDetails}`;
   }
 
   const sign = diff > 0 ? '+' : '';
   const emoji = diff > 0 ? '⬆️' : '⬇️';
-  return `${currentFormatted} (${sign}${diff.toFixed(2)}%) ${emoji}<br/>${coverageDetails}`;
+  return `${currentFormatted} (${sign}${diff.toFixed(2)}%) ${emoji}\n${coverageDetails}`;
 }
 
 /**
@@ -30876,10 +30871,10 @@ function generateCoverageTable(coverage, detailedCoverage = true) {
 
     if (summary) {
       if (detailedCoverage) {
-        const lines = `${formatPercentage(summary.lines?.pct)}<br/><small>${summary.lines?.covered || 0}/${summary.lines?.total || 0}</small>`;
-        const functions = `${formatPercentage(summary.functions?.pct)}<br/><small>${summary.functions?.covered || 0}/${summary.functions?.total || 0}</small>`;
-        const branches = `${formatPercentage(summary.branches?.pct)}<br/><small>${summary.branches?.covered || 0}/${summary.branches?.total || 0}</small>`;
-        const statements = `${formatPercentage(summary.statements?.pct || summary.lines?.pct)}<br/><small>${summary.statements?.covered || summary.lines?.covered || 0}/${summary.statements?.total || summary.lines?.total || 0}</small>`;
+        const lines = `${formatPercentage(summary.lines?.pct)}\n*${summary.lines?.covered || 0}/${summary.lines?.total || 0}*`;
+        const functions = `${formatPercentage(summary.functions?.pct)}\n*${summary.functions?.covered || 0}/${summary.functions?.total || 0}*`;
+        const branches = `${formatPercentage(summary.branches?.pct)}\n*${summary.branches?.covered || 0}/${summary.branches?.total || 0}*`;
+        const statements = `${formatPercentage(summary.statements?.pct || summary.lines?.pct)}\n*${summary.statements?.covered || summary.lines?.covered || 0}/${summary.statements?.total || summary.lines?.total || 0}*`;
 
         report += `| ${projectName} | ${lines} | ${functions} | ${branches} | ${statements} |\n`;
       } else {
