@@ -30517,7 +30517,7 @@ async function parseCoverage(coverageFolder) {
   for (const lcovFile of lcovFiles) {
     const projectPath = getProjectPathFromFile(lcovFile, coverageFolder);
     const projectName = getProjectName(projectPath);
-    
+
     try {
       const lcovData = await lcovParseAsync(lcovFile);
       coverage[projectName] = {
@@ -30535,7 +30535,7 @@ async function parseCoverage(coverageFolder) {
   for (const jsonFile of jsonFiles) {
     const projectPath = getProjectPathFromFile(jsonFile, coverageFolder);
     const projectName = getProjectName(projectPath);
-    
+
     try {
       const jsonData = JSON.parse(fs.readFileSync(jsonFile, 'utf8'));
       coverage[projectName] = {
@@ -30571,13 +30571,13 @@ function getProjectName(projectPath) {
   if (projectPath === 'root' || projectPath === '.') {
     return 'root';
   }
-  
+
   // For Nx structure like apps/frontend or libs/shared
   const parts = projectPath.split(path.sep);
   if (parts.length >= 2) {
     return `${parts[0]}/${parts[1]}`;
   }
-  
+
   return parts[parts.length - 1] || 'unknown';
 }
 
@@ -30615,9 +30615,12 @@ function calculateSummaryFromLcov(lcovData) {
   }
 
   // Calculate percentages
-  summary.lines.pct = summary.lines.total > 0 ? (summary.lines.covered / summary.lines.total) * 100 : 0;
-  summary.functions.pct = summary.functions.total > 0 ? (summary.functions.covered / summary.functions.total) * 100 : 0;
-  summary.branches.pct = summary.branches.total > 0 ? (summary.branches.covered / summary.branches.total) * 100 : 0;
+  summary.lines.pct =
+    summary.lines.total > 0 ? (summary.lines.covered / summary.lines.total) * 100 : 0;
+  summary.functions.pct =
+    summary.functions.total > 0 ? (summary.functions.covered / summary.functions.total) * 100 : 0;
+  summary.branches.pct =
+    summary.branches.total > 0 ? (summary.branches.covered / summary.branches.total) * 100 : 0;
   summary.statements.pct = summary.lines.pct; // Use lines as statements for LCOV
 
   return summary;
@@ -30633,10 +30636,7 @@ function compareCoverage(current, base) {
   const diff = {};
 
   // Get all project names from both current and base
-  const allProjects = new Set([
-    ...Object.keys(current || {}),
-    ...Object.keys(base || {})
-  ]);
+  const allProjects = new Set([...Object.keys(current || {}), ...Object.keys(base || {})]);
 
   for (const projectName of allProjects) {
     const currentProject = current[projectName];
