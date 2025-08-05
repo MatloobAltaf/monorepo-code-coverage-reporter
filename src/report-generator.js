@@ -276,7 +276,7 @@ function generateDetailedBreakdown(diff, hideUnchanged) {
         Math.abs(projectDiff.diff.statements || 0) >= 0.01
       );
     }
-    return projectDiff.status !== 'modified' || !hideUnchanged;
+    return true;
   });
 
   if (changedProjects.length === 0) {

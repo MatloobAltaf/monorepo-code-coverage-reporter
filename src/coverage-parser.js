@@ -1,5 +1,5 @@
 const fs = require('fs');
-const path = require('path');
+const core = require('@actions/core');
 const { glob } = require('glob');
 
 /**
@@ -15,12 +15,14 @@ async function parseCoverage(coverageFolder) {
   }
 
   // Find all coverage-summary.json files recursively
-  const jsonSummaryFiles = await glob(`${coverageFolder}/**/coverage-summary.json`, {
-    absolute: true
-  });
+  const jsonSummaryFiles = await glob(`${coverageFolder}/**/coverage-summary.json`);
+
+  core.info(`Found ${jsonSummaryFiles.length} coverage-summary.json files`);
 
   // Parse JSON summary files
   for (const jsonFile of jsonSummaryFiles) {
+    core.info(`Parsing ${jsonFile}`);
+
     const projectPath = getProjectPathFromFile(jsonFile, coverageFolder);
     const projectName = getProjectName(projectPath);
 
@@ -50,7 +52,10 @@ async function parseCoverage(coverageFolder) {
  * @returns {string} Project path
  */
 function getProjectPathFromFile(filePath, coverageFolder) {
-  const relativePath = path.relative(path.resolve(coverageFolder), path.dirname(filePath));
+  const relativePath = filePath
+    .replace(`${coverageFolder}/`, '')
+    .replace('/coverage-summary.json', '');
+
   return relativePath || 'root';
 }
 
@@ -65,7 +70,6 @@ function getProjectName(projectPath) {
   }
 
   // Use the full relative path as the project name
-  // This will create names like "apps/transect", "apps/backend", "library", "xyz/abc/qw"
   return projectPath;
 }
 

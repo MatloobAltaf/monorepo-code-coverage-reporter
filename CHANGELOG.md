@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Critical**: Missing projects in coverage reports (apps/transect, libraries-coverage now properly detected)
+- **Critical**: Missing projects in coverage reports (apps/frontend, libraries-coverage now properly detected)
 - **Critical**: Incorrect coverage comparison logic between different file formats
 - **Critical**: Project name generation inconsistencies
 - All linting errors and unused variables

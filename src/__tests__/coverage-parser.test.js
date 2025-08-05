@@ -5,6 +5,17 @@ const { parseCoverage, compareCoverage } = require('../coverage-parser');
 jest.mock('fs');
 jest.mock('glob');
 
+// Mock @actions/core to prevent the fs.promises.access error
+jest.mock('@actions/core', () => ({
+  info: jest.fn(),
+  warning: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
+  setFailed: jest.fn(),
+  getInput: jest.fn(),
+  setOutput: jest.fn()
+}));
+
 const mockFs = fs;
 const { glob: mockGlob } = require('glob');
 
@@ -58,7 +69,7 @@ describe('coverage-parser', () => {
         if (pattern.includes('coverage-summary.json')) {
           return [
             '/coverage/apps/backend/coverage-summary.json',
-            '/coverage/apps/transect/coverage-summary.json',
+            '/coverage/apps/frontend/coverage-summary.json',
             '/coverage/libraries-coverage/coverage-summary.json'
           ];
         }
@@ -80,11 +91,11 @@ describe('coverage-parser', () => {
 
       // Verify all three projects are parsed
       expect(result['apps/backend']).toBeDefined();
-      expect(result['apps/transect']).toBeDefined();
+      expect(result['apps/frontend']).toBeDefined();
       expect(result['libraries-coverage']).toBeDefined();
 
       // Verify each project has correct coverage data
-      ['apps/backend', 'apps/transect', 'libraries-coverage'].forEach((project) => {
+      ['apps/backend', 'apps/frontend', 'libraries-coverage'].forEach((project) => {
         expect(result[project].summary).toEqual(mockJsonData.total);
         expect(result[project].path).toBeDefined();
       });
@@ -95,10 +106,10 @@ describe('coverage-parser', () => {
       mockGlob.mockImplementation(async (pattern, _options) => {
         if (pattern.includes('coverage-summary.json')) {
           return [
-            '/coverage/apps/transect/coverage-summary.json',
+            '/coverage/apps/frontend/coverage-summary.json',
             '/coverage/apps/backend/coverage-summary.json',
-            '/coverage/apps/mvt-server/coverage-summary.json',
-            '/coverage/apps/pull-subscribers/coverage-summary.json',
+            '/coverage/apps/server/coverage-summary.json',
+            '/coverage/apps/integrations/coverage-summary.json',
             '/coverage/libraries-coverage/coverage-summary.json'
           ];
         }
@@ -107,7 +118,7 @@ describe('coverage-parser', () => {
 
       // Create different coverage data for each project
       const coverageData = {
-        '/coverage/apps/transect/coverage-summary.json': {
+        '/coverage/apps/frontend/coverage-summary.json': {
           total: {
             lines: { total: 1500, covered: 1275, pct: 85.0 },
             functions: { total: 300, covered: 270, pct: 90.0 },
@@ -123,7 +134,7 @@ describe('coverage-parser', () => {
             statements: { total: 2400, covered: 1920, pct: 80.0 }
           }
         },
-        '/coverage/apps/mvt-server/coverage-summary.json': {
+        '/coverage/apps/server/coverage-summary.json': {
           total: {
             lines: { total: 800, covered: 720, pct: 90.0 },
             functions: { total: 160, covered: 144, pct: 90.0 },
@@ -131,7 +142,7 @@ describe('coverage-parser', () => {
             statements: { total: 960, covered: 864, pct: 90.0 }
           }
         },
-        '/coverage/apps/pull-subscribers/coverage-summary.json': {
+        '/coverage/apps/integrations/coverage-summary.json': {
           total: {
             lines: { total: 600, covered: 480, pct: 80.0 },
             functions: { total: 120, covered: 96, pct: 80.0 },
@@ -166,34 +177,34 @@ describe('coverage-parser', () => {
       console.log('=== END PARSED COVERAGE DATA ===\n');
 
       // Verify all projects are parsed
-      expect(result).toHaveProperty('apps/transect');
+      expect(result).toHaveProperty('apps/frontend');
       expect(result).toHaveProperty('apps/backend');
-      expect(result).toHaveProperty('apps/mvt-server');
-      expect(result).toHaveProperty('apps/pull-subscribers');
+      expect(result).toHaveProperty('apps/server');
+      expect(result).toHaveProperty('apps/integrations');
       expect(result).toHaveProperty('libraries-coverage');
 
       // Verify each project has the correct coverage data
-      expect(result['apps/transect'].summary).toEqual(
-        coverageData['/coverage/apps/transect/coverage-summary.json'].total
+      expect(result['apps/frontend'].summary).toEqual(
+        coverageData['/coverage/apps/frontend/coverage-summary.json'].total
       );
       expect(result['apps/backend'].summary).toEqual(
         coverageData['/coverage/apps/backend/coverage-summary.json'].total
       );
-      expect(result['apps/mvt-server'].summary).toEqual(
-        coverageData['/coverage/apps/mvt-server/coverage-summary.json'].total
+      expect(result['apps/server'].summary).toEqual(
+        coverageData['/coverage/apps/server/coverage-summary.json'].total
       );
-      expect(result['apps/pull-subscribers'].summary).toEqual(
-        coverageData['/coverage/apps/pull-subscribers/coverage-summary.json'].total
+      expect(result['apps/integrations'].summary).toEqual(
+        coverageData['/coverage/apps/integrations/coverage-summary.json'].total
       );
       expect(result['libraries-coverage'].summary).toEqual(
         coverageData['/coverage/libraries-coverage/coverage-summary.json'].total
       );
 
       // Verify project paths are correct
-      expect(result['apps/transect'].path).toBe('apps/transect');
+      expect(result['apps/frontend'].path).toBe('apps/frontend');
       expect(result['apps/backend'].path).toBe('apps/backend');
-      expect(result['apps/mvt-server'].path).toBe('apps/mvt-server');
-      expect(result['apps/pull-subscribers'].path).toBe('apps/pull-subscribers');
+      expect(result['apps/server'].path).toBe('apps/server');
+      expect(result['apps/integrations'].path).toBe('apps/integrations');
       expect(result['libraries-coverage'].path).toBe('libraries-coverage');
 
       // Verify the number of projects parsed
@@ -230,7 +241,7 @@ describe('coverage-parser', () => {
       const mockGlob = jest
         .fn()
         .mockResolvedValue([
-          '/test/coverage/apps/transect/coverage-summary.json',
+          '/test/coverage/apps/frontend/coverage-summary.json',
           '/test/coverage/apps/backend/coverage-summary.json',
           '/test/coverage/library/coverage-summary.json',
           '/test/coverage/xyz/abc/qw/coverage-summary.json'
@@ -247,13 +258,13 @@ describe('coverage-parser', () => {
       const result = await parseCoverageWithMocks('/test/coverage');
 
       // Verify that project names are correctly extracted from paths
-      expect(result).toHaveProperty('apps/transect');
+      expect(result).toHaveProperty('apps/frontend');
       expect(result).toHaveProperty('apps/backend');
       expect(result).toHaveProperty('library');
       expect(result).toHaveProperty('xyz/abc/qw');
 
       // Verify that each project has the expected structure
-      expect(result['apps/transect']).toHaveProperty('summary');
+      expect(result['apps/frontend']).toHaveProperty('summary');
       expect(result['apps/backend']).toHaveProperty('summary');
       expect(result['library']).toHaveProperty('summary');
       expect(result['xyz/abc/qw']).toHaveProperty('summary');

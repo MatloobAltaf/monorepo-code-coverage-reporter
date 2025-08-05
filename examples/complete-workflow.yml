@@ -40,8 +40,8 @@ jobs:
           # Frontend app
           if [ -d "./coverage-artifacts/frontend-coverage" ]; then
             echo "Found frontend coverage"
-            mkdir -p ./coverage/apps/transect
-            cp -r ./coverage-artifacts/frontend-coverage/* ./coverage/apps/transect/ 2>/dev/null || true
+            mkdir -p ./coverage/apps/frontend
+            cp -r ./coverage-artifacts/frontend-coverage/* ./coverage/apps/frontend/ 2>/dev/null || true
           fi
 
           # Backend app (multiple shards)
@@ -54,17 +54,17 @@ jobs:
           fi
 
           # MVT server app
-          if [ -d "./coverage-artifacts/mvt-server-coverage" ]; then
+          if [ -d "./coverage-artifacts/server-coverage" ]; then
             echo "Found MVT server coverage"
-            mkdir -p ./coverage/apps/mvt-server
-            cp -r ./coverage-artifacts/mvt-server-coverage/* ./coverage/apps/mvt-server/ 2>/dev/null || true
+            mkdir -p ./coverage/apps/server
+            cp -r ./coverage-artifacts/server-coverage/* ./coverage/apps/server/ 2>/dev/null || true
           fi
 
           # Pull subscribers app
-          if [ -d "./coverage-artifacts/pull-subscribers-coverage" ]; then
-            echo "Found pull-subscribers coverage"
-            mkdir -p ./coverage/apps/pull-subscribers
-            cp -r ./coverage-artifacts/pull-subscribers-coverage/* ./coverage/apps/pull-subscribers/ 2>/dev/null || true
+          if [ -d "./coverage-artifacts/integrations-coverage" ]; then
+            echo "Found integrations coverage"
+            mkdir -p ./coverage/apps/integrations
+            cp -r ./coverage-artifacts/integrations-coverage/* ./coverage/apps/integrations/ 2>/dev/null || true
           fi
 
           # Libraries (all libraries tested in libraries workflow)
@@ -88,15 +88,15 @@ jobs:
             echo "No coverage data found"
           fi
 
-      - name: Download base coverage for transect app (target branch)
+      - name: Download base coverage for frontend app (target branch)
         uses: dawidd6/action-download-artifact@v6
-        id: download-base-coverage-transect
+        id: download-base-coverage-frontend
         continue-on-error: true
         with:
           workflow: ci.yml
           branch: ${{ github.event.pull_request.base.ref || 'staging' }}
-          name: coverage-base-transect
-          path: ./coverage-base/apps/transect
+          name: coverage-base-frontend
+          path: ./coverage-base/apps/frontend
           search_artifacts: true
           workflow_search: true
           workflow_conclusion: ''
@@ -116,29 +116,29 @@ jobs:
           workflow_conclusion: ''
           if_no_artifact_found: 'warn'
 
-      - name: Download base coverage for mvt-server app (target branch)
+      - name: Download base coverage for server app (target branch)
         uses: dawidd6/action-download-artifact@v6
-        id: download-base-coverage-mvt-server
+        id: download-base-coverage-server
         continue-on-error: true
         with:
           workflow: ci.yml
           branch: ${{ github.event.pull_request.base.ref || 'staging' }}
-          name: coverage-base-mvt-server
-          path: ./coverage-base/apps/mvt-server
+          name: coverage-base-server
+          path: ./coverage-base/apps/server
           search_artifacts: true
           workflow_search: true
           workflow_conclusion: ''
           if_no_artifact_found: 'warn'
 
-      - name: Download base coverage for pull-subscribers app (target branch)
+      - name: Download base coverage for integrations app (target branch)
         uses: dawidd6/action-download-artifact@v6
-        id: download-base-coverage-pull-subscribers
+        id: download-base-coverage-integrations
         continue-on-error: true
         with:
           workflow: ci.yml
           branch: ${{ github.event.pull_request.base.ref || 'staging' }}
-          name: coverage-base-pull-subscribers
-          path: ./coverage-base/apps/pull-subscribers
+          name: coverage-base-integrations
+          path: ./coverage-base/apps/integrations
           search_artifacts: true
           workflow_search: true
           workflow_conclusion: ''
@@ -171,12 +171,12 @@ jobs:
 
           comment-title: 'Code Coverage Report'
 
-      - name: Upload coverage for future diffs - transect app
-        if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && hashFiles('./coverage/apps/transect/**/*') != ''
+      - name: Upload coverage for future diffs - frontend app
+        if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && hashFiles('./coverage/apps/frontend/**/*') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-base-transect
-          path: ./coverage/apps/transect
+          name: coverage-base-frontend
+          path: ./coverage/apps/frontend
           retention-days: 30
 
       - name: Upload coverage for future diffs - backend app
@@ -187,20 +187,20 @@ jobs:
           path: ./coverage/apps/backend
           retention-days: 30
 
-      - name: Upload coverage for future diffs - mvt-server app
-        if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && hashFiles('./coverage/apps/mvt-server/**/*') != ''
+      - name: Upload coverage for future diffs - server app
+        if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && hashFiles('./coverage/apps/server/**/*') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-base-mvt-server
-          path: ./coverage/apps/mvt-server
+          name: coverage-base-server
+          path: ./coverage/apps/server
           retention-days: 30
 
-      - name: Upload coverage for future diffs - pull-subscribers app
-        if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && hashFiles('./coverage/apps/pull-subscribers/**/*') != ''
+      - name: Upload coverage for future diffs - integrations app
+        if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && hashFiles('./coverage/apps/integrations/**/*') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-base-pull-subscribers
-          path: ./coverage/apps/pull-subscribers
+          name: coverage-base-integrations
+          path: ./coverage/apps/integrations
           retention-days: 30
 
       - name: Upload coverage for future diffs - libs
