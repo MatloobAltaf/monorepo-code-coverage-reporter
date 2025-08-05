@@ -53,3 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed a bug where the release action was not working as expected
+
+## [1.0.3] - 2025-08-05
+
+### Fixed
+
+- Added dist folder to the release
