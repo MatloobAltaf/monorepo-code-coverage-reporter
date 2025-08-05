@@ -3,8 +3,7 @@ const path = require('path');
 const { glob } = require('glob');
 
 /**
- * Parse coverage data from a directory containing nested coverage files
- * Supports JSON summary files (coverage-summary.json)
+ * Parse coverage data from a directory containing nested coverage-summary.json files
  * @param {string} coverageFolder - Path to coverage folder
  * @returns {Object} Parsed coverage data organized by project
  */
@@ -56,7 +55,7 @@ function getProjectPathFromFile(filePath, coverageFolder) {
 }
 
 /**
- * Get project name from project path
+ * Get project name from project path - use the full relative path as the name
  * @param {string} projectPath - Project path
  * @returns {string} Project name
  */
@@ -65,13 +64,9 @@ function getProjectName(projectPath) {
     return 'root';
   }
 
-  // For Nx structure like apps/frontend or libs/shared
-  const parts = projectPath.split(path.sep);
-  if (parts.length >= 2) {
-    return `${parts[0]}/${parts[1]}`;
-  }
-
-  return parts[parts.length - 1] || 'unknown';
+  // Use the full relative path as the project name
+  // This will create names like "apps/transect", "apps/backend", "library", "xyz/abc/qw"
+  return projectPath;
 }
 
 /**

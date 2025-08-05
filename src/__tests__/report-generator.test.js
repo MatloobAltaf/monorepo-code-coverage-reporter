@@ -136,8 +136,8 @@ describe('report-generator', () => {
       const result = generateReport(options);
 
       expect(result).toContain('🔄 Individual App/Library Coverage Changes');
-      expect(result).toContain('<br/>');
-      expect(result).toContain('<small>');
+      expect(result).toContain('\n*');
+      expect(result).toContain('*85/100*');
       expect(result).toContain('📑 Detailed Coverage Breakdown');
     });
 
@@ -156,8 +156,7 @@ describe('report-generator', () => {
       const result = generateReport(options);
 
       expect(result).toContain('🔄 Individual App/Library Coverage Changes');
-      expect(result).not.toContain('<br/>');
-      expect(result).not.toContain('<small>');
+      expect(result).not.toContain('*85/100*');
       expect(result).not.toContain('📋 Detailed Coverage Breakdown');
     });
   });
@@ -176,7 +175,7 @@ describe('report-generator', () => {
       const result = generateEnhancedProjectRow('apps/frontend', projectDiff);
 
       expect(result).toContain('85.00% 🔹');
-      expect(result).toContain('<small>85/100</small>');
+      expect(result).toContain('*85/100*');
       expect(result).toContain('➕ Added');
     });
 
@@ -206,7 +205,7 @@ describe('report-generator', () => {
       const result = generateEnhancedProjectRow('apps/frontend', projectDiff);
 
       expect(result).toContain('85.00% (+5.00%) ⬆️');
-      expect(result).toContain('<small>85/100</small>');
+      expect(result).toContain('*85/100*');
       expect(result).toContain('⬆️ Increased');
     });
   });

@@ -89,6 +89,59 @@ describe('coverage-parser', () => {
         expect(result[project].path).toBeDefined();
       });
     });
+
+    it('should parse coverage with correct project naming for different structures', async () => {
+      // Mock the file system and glob for this specific test
+      const originalFs = require('fs');
+
+      const mockFs = {
+        ...originalFs,
+        existsSync: jest.fn().mockReturnValue(true),
+        readFileSync: jest.fn().mockImplementation((path) => {
+          if (path.includes('coverage-summary.json')) {
+            return JSON.stringify({
+              total: {
+                lines: { pct: 85, covered: 85, total: 100 },
+                functions: { pct: 90, covered: 18, total: 20 },
+                branches: { pct: 80, covered: 40, total: 50 }
+              }
+            });
+          }
+          throw new Error('File not found');
+        })
+      };
+
+      const mockGlob = jest
+        .fn()
+        .mockResolvedValue([
+          '/test/coverage/apps/transect/coverage-summary.json',
+          '/test/coverage/apps/backend/coverage-summary.json',
+          '/test/coverage/library/coverage-summary.json',
+          '/test/coverage/xyz/abc/qw/coverage-summary.json'
+        ]);
+
+      // Temporarily replace the modules
+      jest.doMock('fs', () => mockFs);
+      jest.doMock('glob', () => ({ glob: mockGlob }));
+
+      // Clear the module cache to reload with new mocks
+      jest.resetModules();
+
+      const { parseCoverage: parseCoverageWithMocks } = require('../coverage-parser');
+      const result = await parseCoverageWithMocks('/test/coverage');
+
+      // Verify that project names are correctly extracted from paths
+      expect(result).toHaveProperty('apps/transect');
+      expect(result).toHaveProperty('apps/backend');
+      expect(result).toHaveProperty('library');
+      expect(result).toHaveProperty('xyz/abc/qw');
+
+      // Verify that each project has the expected structure
+      expect(result['apps/transect']).toHaveProperty('summary');
+      expect(result['apps/backend']).toHaveProperty('summary');
+      expect(result['library']).toHaveProperty('summary');
+      expect(result['xyz/abc/qw']).toHaveProperty('summary');
+    });
   });
 
   describe('compareCoverage', () => {
