@@ -24,7 +24,6 @@ async function parseCoverage(coverageFolder) {
     core.info(`Parsing ${jsonFile}`);
 
     const projectPath = getProjectPathFromFile(jsonFile, coverageFolder);
-    const projectName = getProjectName(projectPath);
 
     try {
       const jsonData = JSON.parse(fs.readFileSync(jsonFile, 'utf8'));
@@ -33,7 +32,7 @@ async function parseCoverage(coverageFolder) {
       // The file contains a 'total' field with aggregated coverage data
       const summary = jsonData.total || jsonData;
 
-      coverage[projectName] = {
+      coverage[projectPath] = {
         summary: summary,
         path: projectPath
       };
@@ -53,24 +52,10 @@ async function parseCoverage(coverageFolder) {
  */
 function getProjectPathFromFile(filePath, coverageFolder) {
   const relativePath = filePath
-    .replace(`${coverageFolder}/`, '')
+    .replace(`${coverageFolder.replace('./', '')}/`, '')
     .replace('/coverage-summary.json', '');
 
   return relativePath || 'root';
-}
-
-/**
- * Get project name from project path - use the full relative path as the name
- * @param {string} projectPath - Project path
- * @returns {string} Project name
- */
-function getProjectName(projectPath) {
-  if (projectPath === 'root' || projectPath === '.') {
-    return 'root';
-  }
-
-  // Use the full relative path as the project name
-  return projectPath;
 }
 
 /**
