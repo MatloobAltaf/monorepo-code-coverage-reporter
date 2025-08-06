@@ -30381,7 +30381,6 @@ async function parseCoverage(coverageFolder) {
     core.info(`Parsing ${jsonFile}`);
 
     const projectPath = getProjectPathFromFile(jsonFile, coverageFolder);
-    const projectName = getProjectName(projectPath);
 
     try {
       const jsonData = JSON.parse(fs.readFileSync(jsonFile, 'utf8'));
@@ -30390,7 +30389,7 @@ async function parseCoverage(coverageFolder) {
       // The file contains a 'total' field with aggregated coverage data
       const summary = jsonData.total || jsonData;
 
-      coverage[projectName] = {
+      coverage[projectPath] = {
         summary: summary,
         path: projectPath
       };
@@ -30410,24 +30409,10 @@ async function parseCoverage(coverageFolder) {
  */
 function getProjectPathFromFile(filePath, coverageFolder) {
   const relativePath = filePath
-    .replace(`${coverageFolder}/`, '')
+    .replace(`${coverageFolder.replace('./', '')}/`, '')
     .replace('/coverage-summary.json', '');
 
   return relativePath || 'root';
-}
-
-/**
- * Get project name from project path - use the full relative path as the name
- * @param {string} projectPath - Project path
- * @returns {string} Project name
- */
-function getProjectName(projectPath) {
-  if (projectPath === 'root' || projectPath === '.') {
-    return 'root';
-  }
-
-  // Use the full relative path as the project name
-  return projectPath;
 }
 
 /**
@@ -30682,10 +30667,10 @@ function generateEnhancedProjectRow(projectName, projectDiff) {
 
   switch (status) {
     case 'added':
-      linesCell = `${formatPercentage(current.lines?.pct)} 🔹\n*${current.lines?.covered || 0}/${current.lines?.total || 0}*`;
-      functionsCell = `${formatPercentage(current.functions?.pct)} 🔹\n*${current.functions?.covered || 0}/${current.functions?.total || 0}*`;
-      branchesCell = `${formatPercentage(current.branches?.pct)} 🔹\n*${current.branches?.covered || 0}/${current.branches?.total || 0}*`;
-      statementsCell = `${formatPercentage(current.statements?.pct)} 🔹\n*${current.statements?.covered || 0}/${current.statements?.total || 0}*`;
+      linesCell = `${formatPercentage(current.lines?.pct)} 🔹<br>*${current.lines?.covered || 0}/${current.lines?.total || 0}*`;
+      functionsCell = `${formatPercentage(current.functions?.pct)} 🔹<br>*${current.functions?.covered || 0}/${current.functions?.total || 0}*`;
+      branchesCell = `${formatPercentage(current.branches?.pct)} 🔹<br>*${current.branches?.covered || 0}/${current.branches?.total || 0}*`;
+      statementsCell = `${formatPercentage(current.statements?.pct)} 🔹<br>*${current.statements?.covered || 0}/${current.statements?.total || 0}*`;
       statusCell = '➕ Added';
       break;
 
@@ -30745,12 +30730,12 @@ function formatEnhancedDiffCell(current, base, diff) {
   const coverageDetails = `*${currentCovered}/${currentTotal}*`;
 
   if (Math.abs(diff) < 0.01) {
-    return `${currentFormatted}\n${coverageDetails}`;
+    return `${currentFormatted}<br>${coverageDetails}`;
   }
 
   const sign = diff > 0 ? '+' : '';
   const emoji = diff > 0 ? '⬆️' : '⬇️';
-  return `${currentFormatted} (${sign}${diff.toFixed(2)}%) ${emoji}\n${coverageDetails}`;
+  return `${currentFormatted} (${sign}${diff.toFixed(2)}%) ${emoji}<br>${coverageDetails}`;
 }
 
 /**
@@ -30875,10 +30860,10 @@ function generateCoverageTable(coverage, detailedCoverage = true) {
 
     if (summary) {
       if (detailedCoverage) {
-        const lines = `${formatPercentage(summary.lines?.pct)}\n*${summary.lines?.covered || 0}/${summary.lines?.total || 0}*`;
-        const functions = `${formatPercentage(summary.functions?.pct)}\n*${summary.functions?.covered || 0}/${summary.functions?.total || 0}*`;
-        const branches = `${formatPercentage(summary.branches?.pct)}\n*${summary.branches?.covered || 0}/${summary.branches?.total || 0}*`;
-        const statements = `${formatPercentage(summary.statements?.pct || summary.lines?.pct)}\n*${summary.statements?.covered || summary.lines?.covered || 0}/${summary.statements?.total || summary.lines?.total || 0}*`;
+        const lines = `${formatPercentage(summary.lines?.pct)}<br>*${summary.lines?.covered || 0}/${summary.lines?.total || 0}*`;
+        const functions = `${formatPercentage(summary.functions?.pct)}<br>*${summary.functions?.covered || 0}/${summary.functions?.total || 0}*`;
+        const branches = `${formatPercentage(summary.branches?.pct)}<br>*${summary.branches?.covered || 0}/${summary.branches?.total || 0}*`;
+        const statements = `${formatPercentage(summary.statements?.pct || summary.lines?.pct)}<br>*${summary.statements?.covered || summary.lines?.covered || 0}/${summary.statements?.total || summary.lines?.total || 0}*`;
 
         report += `| ${projectName} | ${lines} | ${functions} | ${branches} | ${statements} |\n`;
       } else {
