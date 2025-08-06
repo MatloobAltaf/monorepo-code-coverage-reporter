@@ -30374,8 +30374,6 @@ async function parseCoverage(coverageFolder) {
   // Find all coverage-summary.json files recursively
   const jsonSummaryFiles = await glob(`${coverageFolder}/**/coverage-summary.json`);
 
-  core.info(`Found ${jsonSummaryFiles.length} coverage-summary.json files`);
-
   // Parse JSON summary files
   for (const jsonFile of jsonSummaryFiles) {
     core.info(`Parsing ${jsonFile}`);
