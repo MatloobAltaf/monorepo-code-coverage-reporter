@@ -1,307 +1,205 @@
 const fs = require('fs');
-const { parseCoverage, compareCoverage } = require('../coverage-parser');
+const os = require('os');
+const path = require('path');
 
-// Mock fs and glob
-jest.mock('fs');
-jest.mock('glob');
-
-// Mock @actions/core to prevent the fs.promises.access error
 jest.mock('@actions/core', () => ({
   info: jest.fn(),
   warning: jest.fn(),
   error: jest.fn(),
-  debug: jest.fn(),
-  setFailed: jest.fn(),
-  getInput: jest.fn(),
-  setOutput: jest.fn()
+  debug: jest.fn()
 }));
 
-const mockFs = fs;
-const { glob: mockGlob } = require('glob');
+const core = require('@actions/core');
+const { parseCoverage, compareCoverage, calculateTotalCoverage } = require('../coverage-parser');
+
+const validSummary = (lines = { total: 100, covered: 85, pct: 85 }) => ({
+  total: {
+    lines,
+    statements: { total: 120, covered: 102, pct: 85 },
+    functions: { total: 20, covered: 18, pct: 90 },
+    branches: { total: 50, covered: 40, pct: 80 }
+  }
+});
 
 describe('coverage-parser', () => {
+  let tmpDir;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage-parser-test-'));
   });
 
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeSummary(relDir, data) {
+    const dir = relDir === '.' ? tmpDir : path.join(tmpDir, relDir);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'coverage-summary.json'), JSON.stringify(data));
+  }
+
+  function writeRaw(relDir, content) {
+    const dir = path.join(tmpDir, relDir);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'coverage-summary.json'), content);
+  }
+
   describe('parseCoverage', () => {
-    it('should throw error if coverage folder does not exist', async () => {
-      mockFs.existsSync.mockReturnValue(false);
-
-      await expect(parseCoverage('/nonexistent')).rejects.toThrow(
-        'Coverage folder not found: /nonexistent'
+    it('throws when the coverage folder does not exist', async () => {
+      await expect(parseCoverage(path.join(tmpDir, 'nope'))).rejects.toThrow(
+        'Coverage folder not found'
       );
     });
 
-    it('should parse JSON summary files correctly', async () => {
-      mockFs.existsSync.mockReturnValue(true);
-      mockGlob.mockImplementation(async (pattern, _options) => {
-        if (pattern.includes('coverage-summary.json')) {
-          return ['/coverage/apps/frontend/coverage-summary.json'];
-        }
-        return [];
-      });
+    it('parses nested projects keyed by their relative directory', async () => {
+      writeSummary('apps/frontend', validSummary());
+      writeSummary('apps/backend', validSummary());
+      writeSummary('xyz/abc/qw', validSummary());
 
-      const mockJsonData = {
-        total: {
-          lines: { total: 100, covered: 85, skipped: 0, pct: 85 },
-          statements: { total: 120, covered: 102, skipped: 0, pct: 85 },
-          functions: { total: 20, covered: 18, skipped: 0, pct: 90 },
-          branches: { total: 50, covered: 40, skipped: 0, pct: 80 }
-        }
-      };
+      const result = await parseCoverage(tmpDir);
 
-      mockFs.readFileSync.mockReturnValue(JSON.stringify(mockJsonData));
-
-      const result = await parseCoverage('/coverage');
-
-      expect(result).toEqual({
-        'apps/frontend': {
-          summary: mockJsonData.total,
-          path: 'apps/frontend'
-        }
-      });
-    });
-
-    it('should handle multiple projects correctly', async () => {
-      mockFs.existsSync.mockReturnValue(true);
-      mockGlob.mockImplementation(async (pattern, _options) => {
-        if (pattern.includes('coverage-summary.json')) {
-          return [
-            '/coverage/apps/backend/coverage-summary.json',
-            '/coverage/apps/frontend/coverage-summary.json',
-            '/coverage/libraries-coverage/coverage-summary.json'
-          ];
-        }
-        return [];
-      });
-
-      const mockJsonData = {
-        total: {
-          lines: { total: 100, covered: 85, skipped: 0, pct: 85 },
-          statements: { total: 120, covered: 102, skipped: 0, pct: 85 },
-          functions: { total: 20, covered: 18, skipped: 0, pct: 90 },
-          branches: { total: 50, covered: 40, skipped: 0, pct: 80 }
-        }
-      };
-
-      mockFs.readFileSync.mockReturnValue(JSON.stringify(mockJsonData));
-
-      const result = await parseCoverage('/coverage');
-
-      // Verify all three projects are parsed
-      expect(result['apps/backend']).toBeDefined();
-      expect(result['apps/frontend']).toBeDefined();
-      expect(result['libraries-coverage']).toBeDefined();
-
-      // Verify each project has correct coverage data
-      ['apps/backend', 'apps/frontend', 'libraries-coverage'].forEach((project) => {
-        expect(result[project].summary).toEqual(mockJsonData.total);
-        expect(result[project].path).toBeDefined();
-      });
-    });
-
-    it('should parse multiple projects with different coverage data correctly', async () => {
-      mockFs.existsSync.mockReturnValue(true);
-      mockGlob.mockImplementation(async (pattern, _options) => {
-        if (pattern.includes('coverage-summary.json')) {
-          return [
-            '/coverage/apps/frontend/coverage-summary.json',
-            '/coverage/apps/backend/coverage-summary.json',
-            '/coverage/apps/server/coverage-summary.json',
-            '/coverage/apps/integrations/coverage-summary.json',
-            '/coverage/libraries-coverage/coverage-summary.json'
-          ];
-        }
-        return [];
-      });
-
-      // Create different coverage data for each project
-      const coverageData = {
-        '/coverage/apps/frontend/coverage-summary.json': {
-          total: {
-            lines: { total: 1500, covered: 1275, pct: 85.0 },
-            functions: { total: 300, covered: 270, pct: 90.0 },
-            branches: { total: 750, covered: 600, pct: 80.0 },
-            statements: { total: 1800, covered: 1530, pct: 85.0 }
-          }
-        },
-        '/coverage/apps/backend/coverage-summary.json': {
-          total: {
-            lines: { total: 2000, covered: 1600, pct: 80.0 },
-            functions: { total: 400, covered: 320, pct: 80.0 },
-            branches: { total: 1000, covered: 700, pct: 70.0 },
-            statements: { total: 2400, covered: 1920, pct: 80.0 }
-          }
-        },
-        '/coverage/apps/server/coverage-summary.json': {
-          total: {
-            lines: { total: 800, covered: 720, pct: 90.0 },
-            functions: { total: 160, covered: 144, pct: 90.0 },
-            branches: { total: 400, covered: 320, pct: 80.0 },
-            statements: { total: 960, covered: 864, pct: 90.0 }
-          }
-        },
-        '/coverage/apps/integrations/coverage-summary.json': {
-          total: {
-            lines: { total: 600, covered: 480, pct: 80.0 },
-            functions: { total: 120, covered: 96, pct: 80.0 },
-            branches: { total: 300, covered: 210, pct: 70.0 },
-            statements: { total: 720, covered: 576, pct: 80.0 }
-          }
-        },
-        '/coverage/libraries-coverage/coverage-summary.json': {
-          total: {
-            lines: { total: 3000, covered: 2550, pct: 85.0 },
-            functions: { total: 600, covered: 540, pct: 90.0 },
-            branches: { total: 1500, covered: 1200, pct: 80.0 },
-            statements: { total: 3600, covered: 3060, pct: 85.0 }
-          }
-        }
-      };
-
-      // Mock readFileSync to return different data for each file
-      mockFs.readFileSync.mockImplementation((filePath) => {
-        const data = coverageData[filePath];
-        if (data) {
-          return JSON.stringify(data);
-        }
-        throw new Error(`File not found: ${filePath}`);
-      });
-
-      const result = await parseCoverage('/coverage');
-
-      // Log the result to see what was actually parsed
-      console.log('\n=== PARSED COVERAGE DATA ===');
-      console.log(JSON.stringify(result, null, 2));
-      console.log('=== END PARSED COVERAGE DATA ===\n');
-
-      // Verify all projects are parsed
-      expect(result).toHaveProperty('apps/frontend');
-      expect(result).toHaveProperty('apps/backend');
-      expect(result).toHaveProperty('apps/server');
-      expect(result).toHaveProperty('apps/integrations');
-      expect(result).toHaveProperty('libraries-coverage');
-
-      // Verify each project has the correct coverage data
-      expect(result['apps/frontend'].summary).toEqual(
-        coverageData['/coverage/apps/frontend/coverage-summary.json'].total
-      );
-      expect(result['apps/backend'].summary).toEqual(
-        coverageData['/coverage/apps/backend/coverage-summary.json'].total
-      );
-      expect(result['apps/server'].summary).toEqual(
-        coverageData['/coverage/apps/server/coverage-summary.json'].total
-      );
-      expect(result['apps/integrations'].summary).toEqual(
-        coverageData['/coverage/apps/integrations/coverage-summary.json'].total
-      );
-      expect(result['libraries-coverage'].summary).toEqual(
-        coverageData['/coverage/libraries-coverage/coverage-summary.json'].total
-      );
-
-      // Verify project paths are correct
+      expect(Object.keys(result).sort()).toEqual(['apps/backend', 'apps/frontend', 'xyz/abc/qw']);
+      expect(result['apps/frontend'].summary).toEqual(validSummary().total);
       expect(result['apps/frontend'].path).toBe('apps/frontend');
-      expect(result['apps/backend'].path).toBe('apps/backend');
-      expect(result['apps/server'].path).toBe('apps/server');
-      expect(result['apps/integrations'].path).toBe('apps/integrations');
-      expect(result['libraries-coverage'].path).toBe('libraries-coverage');
-
-      // Verify the number of projects parsed
-      expect(Object.keys(result)).toHaveLength(5);
-
-      console.log('✅ Multiple projects with different coverage data parsed correctly!');
-      console.log(`📊 Total projects parsed: ${Object.keys(result).length}`);
-      Object.keys(result).forEach((project) => {
-        console.log(`  - ${project}: ${result[project].summary.lines.pct}% lines coverage`);
-      });
     });
 
-    it('should parse coverage with correct project naming for different structures', async () => {
-      // Mock the file system and glob for this specific test
-      const originalFs = require('fs');
+    it('keys a summary at the folder root as "root"', async () => {
+      writeSummary('.', validSummary());
 
-      const mockFs = {
-        ...originalFs,
-        existsSync: jest.fn().mockReturnValue(true),
-        readFileSync: jest.fn().mockImplementation((path) => {
-          if (path.includes('coverage-summary.json')) {
-            return JSON.stringify({
-              total: {
-                lines: { pct: 85, covered: 85, total: 100 },
-                functions: { pct: 90, covered: 18, total: 20 },
-                branches: { pct: 80, covered: 40, total: 50 }
-              }
-            });
-          }
-          throw new Error('File not found');
-        })
-      };
+      const result = await parseCoverage(tmpDir);
 
-      const mockGlob = jest
-        .fn()
-        .mockResolvedValue([
-          '/test/coverage/apps/frontend/coverage-summary.json',
-          '/test/coverage/apps/backend/coverage-summary.json',
-          '/test/coverage/library/coverage-summary.json',
-          '/test/coverage/xyz/abc/qw/coverage-summary.json'
-        ]);
+      expect(Object.keys(result)).toEqual(['root']);
+    });
 
-      // Temporarily replace the modules
-      jest.doMock('fs', () => mockFs);
-      jest.doMock('glob', () => ({ glob: mockGlob }));
+    it('handles a trailing slash in the coverage folder argument', async () => {
+      writeSummary('apps/frontend', validSummary());
 
-      // Clear the module cache to reload with new mocks
-      jest.resetModules();
+      const result = await parseCoverage(`${tmpDir}${path.sep}`);
 
-      const { parseCoverage: parseCoverageWithMocks } = require('../coverage-parser');
-      const result = await parseCoverageWithMocks('/test/coverage');
+      expect(Object.keys(result)).toEqual(['apps/frontend']);
+    });
 
-      // Verify that project names are correctly extracted from paths
-      expect(result).toHaveProperty('apps/frontend');
-      expect(result).toHaveProperty('apps/backend');
-      expect(result).toHaveProperty('library');
-      expect(result).toHaveProperty('xyz/abc/qw');
+    it('skips files with malformed JSON and warns', async () => {
+      writeSummary('apps/good', validSummary());
+      writeRaw('apps/bad', '{ not json');
 
-      // Verify that each project has the expected structure
-      expect(result['apps/frontend']).toHaveProperty('summary');
-      expect(result['apps/backend']).toHaveProperty('summary');
-      expect(result['library']).toHaveProperty('summary');
-      expect(result['xyz/abc/qw']).toHaveProperty('summary');
+      const result = await parseCoverage(tmpDir);
+
+      expect(Object.keys(result)).toEqual(['apps/good']);
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('apps/bad'));
+    });
+
+    it('skips summaries without valid line totals and warns', async () => {
+      writeSummary('apps/good', validSummary());
+      writeSummary('apps/empty', {});
+      writeSummary('apps/no-total', { 'src/file.js': { lines: { total: 10, covered: 5 } } });
+      writeSummary('apps/bad-lines', { total: { lines: { total: 'x', covered: null } } });
+
+      const result = await parseCoverage(tmpDir);
+
+      expect(Object.keys(result)).toEqual(['apps/good']);
+      expect(core.warning).toHaveBeenCalledTimes(3);
+    });
+
+    it('accepts a flat summary object without a total wrapper', async () => {
+      writeSummary('apps/flat', {
+        lines: { total: 10, covered: 5, pct: 50 },
+        functions: { total: 2, covered: 1, pct: 50 },
+        branches: { total: 4, covered: 2, pct: 50 }
+      });
+
+      const result = await parseCoverage(tmpDir);
+
+      expect(result['apps/flat'].summary.lines.covered).toBe(5);
+    });
+
+    it('returns an empty object when no summary files exist', async () => {
+      const result = await parseCoverage(tmpDir);
+      expect(result).toEqual({});
+    });
+
+    it('ignores coverage summaries inside node_modules', async () => {
+      writeSummary('apps/good', validSummary());
+      writeSummary('node_modules/some-pkg', validSummary());
+
+      const result = await parseCoverage(tmpDir);
+
+      expect(Object.keys(result)).toEqual(['apps/good']);
+    });
+
+    it('derives missing pct values from raw counts', async () => {
+      writeSummary('apps/no-pct', {
+        total: {
+          lines: { total: 200, covered: 50 },
+          functions: { total: 0, covered: 0 }
+        }
+      });
+
+      const result = await parseCoverage(tmpDir);
+
+      expect(result['apps/no-pct'].summary.lines.pct).toBe(25);
+      expect(result['apps/no-pct'].summary.functions.pct).toBe(100);
+    });
+
+    it('leaves existing pct values untouched', async () => {
+      writeSummary('apps/has-pct', {
+        total: { lines: { total: 200, covered: 50, pct: 25 } }
+      });
+
+      const result = await parseCoverage(tmpDir);
+
+      expect(result['apps/has-pct'].summary.lines.pct).toBe(25);
+    });
+  });
+
+  describe('calculateTotalCoverage', () => {
+    const coverage = {
+      a: { summary: { lines: { total: 100, covered: 50 } } },
+      b: { summary: { lines: { total: 300, covered: 270 } } }
+    };
+
+    it('weights by line counts across projects', () => {
+      expect(calculateTotalCoverage(coverage)).toBe(80);
+    });
+
+    it('restricts to the given project names', () => {
+      expect(calculateTotalCoverage(coverage, ['a'])).toBe(50);
+    });
+
+    it('returns 0 for empty coverage', () => {
+      expect(calculateTotalCoverage({})).toBe(0);
+      expect(calculateTotalCoverage(coverage, [])).toBe(0);
     });
   });
 
   describe('compareCoverage', () => {
-    it('should detect added projects', () => {
+    it('detects added projects', () => {
       const current = {
         'apps/frontend': {
           summary: { lines: { pct: 85 }, functions: { pct: 90 }, branches: { pct: 80 } }
         }
       };
-      const base = {};
 
-      const result = compareCoverage(current, base);
+      const result = compareCoverage(current, {});
 
       expect(result['apps/frontend'].status).toBe('added');
       expect(result['apps/frontend'].current).toEqual(current['apps/frontend'].summary);
     });
 
-    it('should skip removed projects (projects only in base coverage)', () => {
-      const current = {};
+    it('skips projects that exist only in base coverage', () => {
       const base = {
         'apps/backend': {
           summary: { lines: { pct: 75 }, functions: { pct: 80 }, branches: { pct: 70 } }
         }
       };
 
-      const result = compareCoverage(current, base);
+      const result = compareCoverage({}, base);
 
-      // Should not include removed projects in the result
-      expect(result['apps/backend']).toBeUndefined();
       expect(Object.keys(result)).toHaveLength(0);
     });
 
-    it('should calculate diffs for modified projects', () => {
+    it('calculates diffs for modified projects', () => {
       const current = {
         'apps/frontend': {
           summary: { lines: { pct: 85 }, functions: { pct: 90 }, branches: { pct: 80 } }

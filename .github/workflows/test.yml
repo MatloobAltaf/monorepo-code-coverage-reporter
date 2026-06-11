@@ -4,11 +4,19 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -22,6 +30,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
 
       - name: Run linter
         run: npm run lint
@@ -35,56 +46,32 @@ jobs:
       - name: Check if dist is up to date
         run: |
           if [ -n "$(git status --porcelain dist)" ]; then
-            echo "dist/ is not up to date. Please run 'npm run build' and commit the changes."
+            echo "::error::dist/ is not up to date. Run 'npm run build' and commit the changes."
             git status --porcelain dist
             exit 1
           fi
 
   test-action:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: test
+    # Forked PRs get a read-only token; the smoke test posts no comment on
+    # push events, so restrict it to pushes and same-repo PRs.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build action
-        run: npm run build
-
       - name: Create test coverage data
         run: |
-          mkdir -p test-coverage/apps/frontend
-          mkdir -p test-coverage/apps/backend
+          mkdir -p test-coverage/apps/frontend test-coverage/apps/backend
+          mkdir -p test-coverage-base/apps/frontend test-coverage-base/apps/backend
 
-          # Create mock LCOV file
-          cat > test-coverage/apps/frontend/lcov.info << 'EOF'
-          TN:
-          SF:src/app.js
-          FN:1,main
-          FNF:1
-          FNH:1
-          FNDA:1,main
-          DA:1,1
-          DA:2,1
-          DA:3,0
-          LF:3
-          LH:2
-          BRF:0
-          BRH:0
-          end_of_record
-          EOF
-
-          # Create mock JSON summary
-          cat > test-coverage/apps/backend/coverage-summary.json << 'EOF'
+          cat > test-coverage/apps/frontend/coverage-summary.json << 'EOF'
           {
             "total": {
               "lines": { "total": 100, "covered": 85, "pct": 85 },
@@ -95,9 +82,53 @@ jobs:
           }
           EOF
 
+          cat > test-coverage/apps/backend/coverage-summary.json << 'EOF'
+          {
+            "total": {
+              "lines": { "total": 200, "covered": 120, "pct": 60 },
+              "functions": { "total": 40, "covered": 22, "pct": 55 },
+              "statements": { "total": 200, "covered": 120, "pct": 60 },
+              "branches": { "total": 80, "covered": 40, "pct": 50 }
+            }
+          }
+          EOF
+
+          cat > test-coverage-base/apps/frontend/coverage-summary.json << 'EOF'
+          {
+            "total": {
+              "lines": { "total": 100, "covered": 85, "pct": 85 },
+              "functions": { "total": 20, "covered": 18, "pct": 90 },
+              "statements": { "total": 100, "covered": 85, "pct": 85 },
+              "branches": { "total": 50, "covered": 40, "pct": 80 }
+            }
+          }
+          EOF
+
+          cat > test-coverage-base/apps/backend/coverage-summary.json << 'EOF'
+          {
+            "total": {
+              "lines": { "total": 200, "covered": 110, "pct": 55 },
+              "functions": { "total": 40, "covered": 20, "pct": 50 },
+              "statements": { "total": 200, "covered": 110, "pct": 55 },
+              "branches": { "total": 80, "covered": 36, "pct": 45 }
+            }
+          }
+          EOF
+
       - name: Test action
+        id: coverage
         uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           coverage-folder: './test-coverage'
+          coverage-base-folder: './test-coverage-base'
           comment-title: 'Test Coverage Report'
+
+      - name: Verify outputs
+        run: |
+          echo "total-coverage=${{ steps.coverage.outputs.total-coverage }}"
+          echo "coverage-changed=${{ steps.coverage.outputs.coverage-changed }}"
+          echo "coverage-diff=${{ steps.coverage.outputs.coverage-diff }}"
+          test "${{ steps.coverage.outputs.total-coverage }}" = "68.33"
+          test "${{ steps.coverage.outputs.coverage-changed }}" = "true"
+          test "${{ steps.coverage.outputs.coverage-diff }}" = "+3.33"

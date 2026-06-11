@@ -75,12 +75,12 @@ jobs:
 
           # Show what coverage files we have
           echo "Coverage files found:"
-          find ./coverage -name "*.json" -o -name "*.xml" -o -name "lcov.info" | head -20
+          find ./coverage -name "coverage-summary.json" | head -20
 
       - name: Check if coverage data exists
         id: check-coverage
         run: |
-          if find ./coverage -name "*.json" -o -name "*.xml" -o -name "lcov.info" | grep -q .; then
+          if find ./coverage -name "coverage-summary.json" | grep -q .; then
             echo "has-coverage=true" >> $GITHUB_OUTPUT
             echo "Coverage data found"
           else
@@ -160,15 +160,14 @@ jobs:
 
       # Generate comprehensive coverage report
       - name: Generate coverage report
-        uses: your-username/nx-code-coverage@v1
+        uses: MatloobAltaf/monorepo-code-coverage-reporter@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           no-coverage-ran: ${{ steps.check-coverage.outputs.has-coverage == 'false' }}
           coverage-folder: './coverage'
           coverage-base-folder: './coverage-base'
-          hide-coverage-reports: true
-          hide-unchanged: true
-
+          hide-coverage-reports: 'true'
+          hide-unchanged: 'true'
           comment-title: 'Code Coverage Report'
 
       - name: Upload coverage for future diffs - frontend app

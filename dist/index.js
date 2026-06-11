@@ -30203,18 +30203,34 @@ function wrappy (fn, cb) {
 /***/ }),
 
 /***/ 9841:
-/***/ ((module) => {
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const core = __nccwpck_require__(7484);
+
+/**
+ * Hidden HTML marker prefixed to every comment this action creates.
+ * Lets later runs find their own comment reliably, regardless of which
+ * token type posted it (github-actions bot, GitHub App, or PAT).
+ * Double hyphens are collapsed to a single hyphen because `--` would
+ * terminate the HTML comment early and produce a malformed marker.
+ * @param {string} commentTitle - Configured comment title
+ * @returns {string} Marker line
+ */
+function commentMarker(commentTitle) {
+  const safeTitle = commentTitle.replace(/-{2,}/g, '-');
+  return `<!-- monorepo-code-coverage-reporter:${safeTitle} -->`;
+}
 
 /**
  * Post a new comment on a pull request
  * @param {Object} octokit - GitHub API client
  * @param {Object} context - GitHub context
  * @param {string} body - Comment body
- * @returns {Promise<Object>} Comment response
+ * @returns {Promise<Object|null>} Comment response
  */
 async function postComment(octokit, context, body) {
   if (context.eventName !== 'pull_request') {
-    console.log('Not a pull request event, skipping comment');
+    core.info('Not a pull request event, skipping comment');
     return null;
   }
 
@@ -30226,10 +30242,10 @@ async function postComment(octokit, context, body) {
       body
     });
 
-    console.log(`Posted coverage comment: ${response.data.html_url}`);
+    core.info(`Posted coverage comment: ${response.data.html_url}`);
     return response.data;
   } catch (error) {
-    console.error('Failed to post comment:', error.message);
+    core.error(`Failed to post comment: ${error.message}`);
     throw error;
   }
 }
@@ -30251,16 +30267,20 @@ async function updateComment(octokit, context, commentId, body) {
       body
     });
 
-    console.log(`Updated coverage comment: ${response.data.html_url}`);
+    core.info(`Updated coverage comment: ${response.data.html_url}`);
     return response.data;
   } catch (error) {
-    console.error('Failed to update comment:', error.message);
+    core.error(`Failed to update comment: ${error.message}`);
     throw error;
   }
 }
 
 /**
- * Find existing coverage comment by title
+ * Find the existing coverage comment for a given title.
+ * Scans ALL comments (paginated). Prefers the hidden marker; falls back to
+ * the legacy title match for comments created by older action versions.
+ * API failures are propagated to the caller so the run fails instead of
+ * creating a duplicate comment.
  * @param {Object} octokit - GitHub API client
  * @param {Object} context - GitHub context
  * @param {string} commentTitle - Title to search for
@@ -30271,82 +30291,64 @@ async function findExistingComment(octokit, context, commentTitle) {
     return null;
   }
 
-  try {
-    const comments = await octokit.rest.issues.listComments({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      issue_number: context.payload.pull_request.number
-    });
+  const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    issue_number: context.payload.pull_request.number,
+    per_page: 100
+  });
 
-    // Look for comments that start with the comment title
-    const existingComment = comments.data.find(comment => 
-      comment.body.includes(`## ${commentTitle}`) && 
-      comment.user.type === 'Bot'
-    );
-
-    if (existingComment) {
-      console.log(`Found existing coverage comment: ${existingComment.id}`);
-      return existingComment;
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Failed to find existing comment:', error.message);
-    return null;
+  const marker = commentMarker(commentTitle);
+  const markedComment = comments.find((comment) => comment.body?.includes(marker));
+  if (markedComment) {
+    core.info(`Found existing coverage comment: ${markedComment.id}`);
+    return markedComment;
   }
+
+  const legacyComment = comments.find(
+    (comment) => comment.body?.includes(`## ${commentTitle}`) && comment.user?.type === 'Bot'
+  );
+  if (legacyComment) {
+    core.info(`Found existing legacy coverage comment: ${legacyComment.id}`);
+    return legacyComment;
+  }
+
+  return null;
 }
 
 /**
- * Delete old coverage comments to avoid spam
+ * Create or update the coverage comment for a pull request.
  * @param {Object} octokit - GitHub API client
  * @param {Object} context - GitHub context
- * @param {string} commentTitle - Title to search for
- * @returns {Promise<number>} Number of deleted comments
+ * @param {string} commentTitle - Configured comment title
+ * @param {string} body - Comment body (without marker)
+ * @param {boolean} updateExisting - Update an existing comment when found
+ * @returns {Promise<Object|null>} Comment response
  */
-async function deleteOldComments(octokit, context, commentTitle) {
+async function upsertComment(octokit, context, commentTitle, body, updateExisting) {
   if (context.eventName !== 'pull_request') {
-    return 0;
+    core.info('Not a pull request event, skipping comment');
+    return null;
   }
 
-  try {
-    const comments = await octokit.rest.issues.listComments({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      issue_number: context.payload.pull_request.number
-    });
+  const markedBody = `${commentMarker(commentTitle)}\n${body}`;
 
-    const coverageComments = comments.data.filter(comment => 
-      comment.body.includes(`## ${commentTitle}`) && 
-      comment.user.type === 'Bot'
-    );
-
-    let deletedCount = 0;
-    for (const comment of coverageComments) {
-      try {
-        await octokit.rest.issues.deleteComment({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          comment_id: comment.id
-        });
-        deletedCount++;
-        console.log(`Deleted old coverage comment: ${comment.id}`);
-      } catch (deleteError) {
-        console.warn(`Failed to delete comment ${comment.id}:`, deleteError.message);
-      }
+  if (updateExisting) {
+    const existingComment = await findExistingComment(octokit, context, commentTitle);
+    if (existingComment) {
+      return updateComment(octokit, context, existingComment.id, markedBody);
     }
-
-    return deletedCount;
-  } catch (error) {
-    console.error('Failed to delete old comments:', error.message);
-    return 0;
   }
+
+  return postComment(octokit, context, markedBody);
 }
 
 module.exports = {
   postComment,
   updateComment,
   findExistingComment,
-  deleteOldComments
+  upsertComment,
+  commentMarker
 };
 
 
@@ -30356,43 +30358,47 @@ module.exports = {
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const fs = __nccwpck_require__(9896);
+const path = __nccwpck_require__(6928);
 const core = __nccwpck_require__(7484);
 const { glob } = __nccwpck_require__(1363);
 
 /**
  * Parse coverage data from a directory containing nested coverage-summary.json files
  * @param {string} coverageFolder - Path to coverage folder
- * @returns {Object} Parsed coverage data organized by project
+ * @returns {Promise<Object>} Parsed coverage data organized by project
  */
 async function parseCoverage(coverageFolder) {
-  const coverage = {};
-
   if (!fs.existsSync(coverageFolder)) {
     throw new Error(`Coverage folder not found: ${coverageFolder}`);
   }
 
-  // Find all coverage-summary.json files recursively
-  const jsonSummaryFiles = await glob(`${coverageFolder}/**/coverage-summary.json`);
+  // Scope the glob to the folder via cwd so the path itself is never
+  // interpreted as a pattern, and results come back relative.
+  const summaryFiles = await glob('**/coverage-summary.json', {
+    cwd: coverageFolder,
+    ignore: '**/node_modules/**'
+  });
+  const coverage = {};
 
-  // Parse JSON summary files
-  for (const jsonFile of jsonSummaryFiles) {
-    core.info(`Parsing ${jsonFile}`);
-
-    const projectPath = getProjectPathFromFile(jsonFile, coverageFolder);
+  for (const relativeFile of summaryFiles.sort()) {
+    const fullPath = path.join(coverageFolder, relativeFile);
+    const projectPath = getProjectPath(relativeFile);
 
     try {
-      const jsonData = JSON.parse(fs.readFileSync(jsonFile, 'utf8'));
+      const jsonData = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      const summary = extractTotalSummary(jsonData);
 
-      // Extract the total summary from coverage-summary.json
-      // The file contains a 'total' field with aggregated coverage data
-      const summary = jsonData.total || jsonData;
+      if (!summary) {
+        core.warning(`Skipping ${fullPath}: no valid coverage totals found`);
+        continue;
+      }
 
       coverage[projectPath] = {
-        summary: summary,
+        summary,
         path: projectPath
       };
     } catch (error) {
-      console.warn(`Failed to parse JSON summary file ${jsonFile}: ${error.message}`);
+      core.warning(`Failed to parse coverage summary ${fullPath}: ${error.message}`);
     }
   }
 
@@ -30400,17 +30406,92 @@ async function parseCoverage(coverageFolder) {
 }
 
 /**
- * Extract project path from file path relative to coverage folder
- * @param {string} filePath - Full path to coverage file
- * @param {string} coverageFolder - Base coverage folder
- * @returns {string} Project path
+ * Derive the project key from a summary file path relative to the coverage folder
+ * @param {string} relativeFile - Relative path to coverage-summary.json
+ * @returns {string} Project path key
  */
-function getProjectPathFromFile(filePath, coverageFolder) {
-  const relativePath = filePath
-    .replace(`${coverageFolder.replace('./', '')}/`, '')
-    .replace('/coverage-summary.json', '');
+function getProjectPath(relativeFile) {
+  const normalized = relativeFile.split('\\').join('/');
+  const dir = path.posix.dirname(normalized);
+  return dir === '.' ? 'root' : dir;
+}
 
-  return relativePath || 'root';
+/**
+ * Fill in missing pct values from raw counts, matching the istanbul
+ * convention of reporting 100% when there is nothing to cover.
+ * @param {Object} summary - Valid totals summary
+ * @returns {Object} Summary with pct present for every counted metric
+ */
+function normalizeSummary(summary) {
+  for (const metric of ['lines', 'statements', 'functions', 'branches']) {
+    const data = summary[metric];
+    if (
+      data &&
+      typeof data.total === 'number' &&
+      typeof data.covered === 'number' &&
+      typeof data.pct !== 'number'
+    ) {
+      data.pct = data.total === 0 ? 100 : (data.covered / data.total) * 100;
+    }
+  }
+  return summary;
+}
+
+/**
+ * Extract the aggregated totals from a coverage-summary.json payload.
+ * Accepts the standard istanbul shape ({ total: {...} }) and, for backward
+ * compatibility, a flat summary object that itself carries line totals.
+ * @param {Object} jsonData - Parsed JSON payload
+ * @returns {Object|null} Totals summary or null when invalid
+ */
+function extractTotalSummary(jsonData) {
+  if (!jsonData || typeof jsonData !== 'object') {
+    return null;
+  }
+  if (isValidSummary(jsonData.total)) {
+    return normalizeSummary(jsonData.total);
+  }
+  if (isValidSummary(jsonData)) {
+    return normalizeSummary(jsonData);
+  }
+  return null;
+}
+
+/**
+ * Check that a summary carries the numeric line totals the reporter depends on
+ * @param {Object} summary - Candidate summary object
+ * @returns {boolean} Whether the summary is usable
+ */
+function isValidSummary(summary) {
+  return Boolean(
+    summary &&
+      typeof summary === 'object' &&
+      summary.lines &&
+      typeof summary.lines.total === 'number' &&
+      typeof summary.lines.covered === 'number'
+  );
+}
+
+/**
+ * Calculate total coverage as a weighted average over raw line counts
+ * @param {Object} coverage - Parsed coverage data keyed by project
+ * @param {string[]|null} projectNames - Optional subset of projects to include
+ * @returns {number} Total coverage percentage
+ */
+function calculateTotalCoverage(coverage, projectNames = null) {
+  let totalLines = 0;
+  let coveredLines = 0;
+
+  const names = projectNames || Object.keys(coverage || {});
+  for (const name of names) {
+    const projectData = coverage ? coverage[name] : null;
+    if (projectData?.summary) {
+      totalLines += projectData.summary.lines?.total || 0;
+      coveredLines += projectData.summary.lines?.covered || 0;
+    }
+  }
+
+  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
 }
 
 /**
@@ -30467,8 +30548,167 @@ function compareCoverage(current, base) {
 
 module.exports = {
   parseCoverage,
-  compareCoverage
+  compareCoverage,
+  calculateTotalCoverage
 };
+
+
+/***/ }),
+
+/***/ 5105:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const core = __nccwpck_require__(7484);
+const github = __nccwpck_require__(3228);
+const fs = __nccwpck_require__(9896);
+const { parseCoverage, calculateTotalCoverage } = __nccwpck_require__(103);
+const { generateReport } = __nccwpck_require__(1187);
+const { upsertComment } = __nccwpck_require__(9841);
+
+/**
+ * Read a boolean input, falling back to the action.yml default when unset.
+ * GitHub injects action.yml defaults in real runs; the fallback matters for
+ * direct invocations and tests.
+ * @param {string} name - Input name
+ * @param {boolean} defaultValue - Default when the input is empty
+ * @returns {boolean} Parsed input
+ */
+function getBooleanInput(name, defaultValue) {
+  const raw = core.getInput(name);
+  if (raw === '') {
+    return defaultValue;
+  }
+  const lowered = raw.toLowerCase();
+  if (lowered === 'true') {
+    return true;
+  }
+  if (lowered === 'false') {
+    return false;
+  }
+  core.warning(`Input "${name}" expected a boolean, got "${raw}"; treating as false`);
+  return false;
+}
+
+async function run() {
+  try {
+    // Get inputs
+    const token = core.getInput('github-token', { required: true });
+    const coverageFolder = core.getInput('coverage-folder', { required: true });
+    const coverageBaseFolder = core.getInput('coverage-base-folder');
+    const noCoverageRan = getBooleanInput('no-coverage-ran', false);
+    const hideCoverageReports = getBooleanInput('hide-coverage-reports', false);
+    const hideUnchanged = getBooleanInput('hide-unchanged', false);
+
+    const commentTitle = core.getInput('comment-title') || 'Coverage Report';
+    const updateCommentFlag = getBooleanInput('update-comment', true);
+    const includeSummary = getBooleanInput('include-summary', true);
+    const detailedCoverage = getBooleanInput('detailed-coverage', true);
+
+    // Skip if no coverage ran
+    if (noCoverageRan) {
+      core.info('No coverage was generated, skipping coverage report');
+
+      if (github.context.eventName === 'pull_request') {
+        const octokit = github.getOctokit(token);
+        const body = `## ${commentTitle}\n\n⚠️ No coverage data was generated for this build.`;
+        await upsertComment(octokit, github.context, commentTitle, body, updateCommentFlag);
+      }
+
+      return;
+    }
+
+    // Parse current coverage
+    core.info(`Parsing coverage from: ${coverageFolder}`);
+
+    const currentCoverage = await parseCoverage(coverageFolder);
+
+    core.info(`Total projects parsed: ${Object.keys(currentCoverage).length}`);
+    Object.keys(currentCoverage).forEach((project) => {
+      const pct = currentCoverage[project].summary.lines?.pct;
+      core.info(`  - ${project}: ${typeof pct === 'number' ? `${pct}%` : 'N/A'} lines coverage`);
+    });
+
+    if (!currentCoverage || Object.keys(currentCoverage).length === 0) {
+      throw new Error(`No coverage data found in ${coverageFolder}`);
+    }
+
+    // Parse base coverage if provided
+    let baseCoverage = null;
+    if (coverageBaseFolder) {
+      if (fs.existsSync(coverageBaseFolder)) {
+        core.info(`Parsing base coverage from: ${coverageBaseFolder}`);
+        try {
+          const parsedBase = await parseCoverage(coverageBaseFolder);
+          if (Object.keys(parsedBase).length > 0) {
+            baseCoverage = parsedBase;
+          } else {
+            core.warning(
+              `Base coverage folder has no valid coverage data, skipping comparison: ${coverageBaseFolder}`
+            );
+          }
+        } catch (error) {
+          core.warning(`Failed to parse base coverage: ${error.message}`);
+        }
+      } else {
+        core.warning(`Base coverage folder not found, skipping comparison: ${coverageBaseFolder}`);
+      }
+    }
+
+    // Calculate total coverage
+    const totalCoverage = calculateTotalCoverage(currentCoverage);
+    core.info(`Total coverage: ${totalCoverage.toFixed(2)}%`);
+
+    // Set outputs
+    core.setOutput('total-coverage', totalCoverage.toFixed(2));
+
+    if (baseCoverage) {
+      const commonProjects = Object.keys(currentCoverage).filter(
+        (projectName) => projectName in baseCoverage
+      );
+
+      if (commonProjects.length > 0) {
+        const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
+        const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
+        const coverageDiff = comparableCurrent - comparableBase;
+
+        core.setOutput('coverage-changed', Math.abs(coverageDiff) >= 0.01 ? 'true' : 'false');
+        core.setOutput(
+          'coverage-diff',
+          coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2)
+        );
+      } else {
+        core.info(
+          'No projects exist in both current and base coverage, skipping comparison outputs'
+        );
+      }
+    }
+
+    // Generate report for PR comments
+    if (github.context.eventName === 'pull_request') {
+      const report = generateReport({
+        currentCoverage,
+        baseCoverage,
+        totalCoverage,
+        commentTitle,
+        hideCoverageReports,
+        hideUnchanged,
+        includeSummary,
+        detailedCoverage
+      });
+
+      const octokit = github.getOctokit(token);
+      await upsertComment(octokit, github.context, commentTitle, report, updateCommentFlag);
+    }
+  } catch (error) {
+    core.setFailed(error.message);
+  }
+}
+
+module.exports = { run, getBooleanInput };
+
+if (require.main === require.cache[eval('__filename')]) {
+  run();
+}
 
 
 /***/ }),
@@ -30476,7 +30716,7 @@ module.exports = {
 /***/ 1187:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-const { compareCoverage } = __nccwpck_require__(103);
+const { compareCoverage, calculateTotalCoverage } = __nccwpck_require__(103);
 
 /**
  * Generate a markdown coverage report
@@ -30530,12 +30770,23 @@ function generateSummary(currentCoverage, baseCoverage, totalCoverage) {
   let summary = `### Overall Coverage: ${totalCoverage.toFixed(2)}%\n\n`;
 
   if (baseCoverage) {
-    const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
-    const diff = totalCoverage - baseTotalCoverage;
-    const emoji = diff > 0 ? '⬆️' : diff < 0 ? '⬇️' : '➖';
-    const sign = diff > 0 ? '+' : '';
+    const commonProjects = Object.keys(currentCoverage || {}).filter(
+      (projectName) => projectName in baseCoverage
+    );
 
-    summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${baseTotalCoverage.toFixed(2)}%)\n\n`;
+    if (commonProjects.length > 0) {
+      const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
+      const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
+      const diff = comparableCurrent - comparableBase;
+      const emoji = diff >= 0.01 ? '⬆️' : diff <= -0.01 ? '⬇️' : '➖';
+      const sign = diff > 0 ? '+' : '';
+
+      summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${comparableBase.toFixed(2)}%`;
+      if (commonProjects.length < Object.keys(currentCoverage || {}).length) {
+        summary += `, compared across ${commonProjects.length} project(s) present in both runs`;
+      }
+      summary += ')\n\n';
+    }
   }
 
   return summary;
@@ -30664,19 +30915,25 @@ function generateEnhancedProjectRow(projectName, projectDiff) {
   let linesCell, functionsCell, branchesCell, statementsCell, statusCell;
 
   switch (status) {
-    case 'added':
+    case 'added': {
+      const addedStatements = current.statements || current.lines;
       linesCell = `${formatPercentage(current.lines?.pct)} 🔹<br>*${current.lines?.covered || 0}/${current.lines?.total || 0}*`;
       functionsCell = `${formatPercentage(current.functions?.pct)} 🔹<br>*${current.functions?.covered || 0}/${current.functions?.total || 0}*`;
       branchesCell = `${formatPercentage(current.branches?.pct)} 🔹<br>*${current.branches?.covered || 0}/${current.branches?.total || 0}*`;
-      statementsCell = `${formatPercentage(current.statements?.pct)} 🔹<br>*${current.statements?.covered || 0}/${current.statements?.total || 0}*`;
+      statementsCell = `${formatPercentage(addedStatements?.pct)} 🔹<br>*${addedStatements?.covered || 0}/${addedStatements?.total || 0}*`;
       statusCell = '➕ Added';
       break;
+    }
 
     case 'modified': {
       linesCell = formatEnhancedDiffCell(current.lines, base.lines, diff.lines);
       functionsCell = formatEnhancedDiffCell(current.functions, base.functions, diff.functions);
       branchesCell = formatEnhancedDiffCell(current.branches, base.branches, diff.branches);
-      statementsCell = formatEnhancedDiffCell(current.statements, base.statements, diff.statements); // Use statements diff for statements
+      statementsCell = formatEnhancedDiffCell(
+        current.statements || current.lines,
+        base.statements || base.lines,
+        diff.statements
+      );
 
       // Show overall coverage trend based on lines coverage (most comprehensive metric)
       if (Math.abs(diff.lines) >= 0.01) {
@@ -30715,11 +30972,11 @@ function formatDiffCell(current, diff) {
 /**
  * Format an enhanced diff cell with detailed coverage info
  * @param {Object} current - Current coverage data
- * @param {Object} base - Base coverage data
+ * @param {Object} _base - Base coverage data (unused)
  * @param {number} diff - Difference
  * @returns {string} Enhanced formatted cell
  */
-function formatEnhancedDiffCell(current, base, diff) {
+function formatEnhancedDiffCell(current, _base, diff) {
   const currentPct = current?.pct || 0;
   const currentCovered = current?.covered || 0;
   const currentTotal = current?.total || 0;
@@ -30817,6 +31074,15 @@ function generateProjectBreakdown(projectName, projectDiff) {
           breakdown += `- **Branches:** ${formatPercentage(current.branches?.pct)} (${sign}${diff.branches.toFixed(2)}%) ${emoji}\n`;
           breakdown += `  - Current: ${current.branches?.covered || 0}/${current.branches?.total || 0}\n`;
           breakdown += `  - Previous: ${base.branches?.covered || 0}/${base.branches?.total || 0}\n`;
+        }
+        if (Math.abs(diff.statements || 0) >= 0.01) {
+          const currentStatements = current.statements || current.lines;
+          const baseStatements = base.statements || base.lines;
+          const emoji = diff.statements > 0 ? '⬆️' : '⬇️';
+          const sign = diff.statements > 0 ? '+' : '';
+          breakdown += `- **Statements:** ${formatPercentage(currentStatements?.pct)} (${sign}${diff.statements.toFixed(2)}%) ${emoji}\n`;
+          breakdown += `  - Current: ${currentStatements?.covered || 0}/${currentStatements?.total || 0}\n`;
+          breakdown += `  - Previous: ${baseStatements?.covered || 0}/${baseStatements?.total || 0}\n`;
         }
       } else {
         breakdown += '➖ **No significant changes**\n';
@@ -30922,29 +31188,10 @@ function generateIndividualProjectDetails(coverage) {
  * @returns {string} Formatted percentage
  */
 function formatPercentage(value) {
-  if (typeof value !== 'number' || isNaN(value)) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
     return 'N/A';
   }
   return `${value.toFixed(2)}%`;
-}
-
-/**
- * Calculate total coverage from coverage data
- * @param {Object} coverage - Coverage data
- * @returns {number} Total coverage percentage
- */
-function calculateTotalCoverage(coverage) {
-  let totalLines = 0;
-  let coveredLines = 0;
-
-  for (const [, projectData] of Object.entries(coverage)) {
-    if (projectData.summary) {
-      totalLines += projectData.summary.lines?.total || 0;
-      coveredLines += projectData.summary.lines?.covered || 0;
-    }
-  }
-
-  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
 }
 
 module.exports = {
@@ -40803,162 +41050,13 @@ exports.LRUCache = LRUCache;
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
 /******/ 	
 /************************************************************************/
-var __webpack_exports__ = {};
-const core = __nccwpck_require__(7484);
-const github = __nccwpck_require__(3228);
-const fs = __nccwpck_require__(9896);
-const path = __nccwpck_require__(6928);
-const { parseCoverage } = __nccwpck_require__(103);
-const { generateReport } = __nccwpck_require__(1187);
-const { postComment, updateComment, findExistingComment } = __nccwpck_require__(9841);
-
-async function run() {
-  try {
-    // Get inputs
-    const token = core.getInput('github-token', { required: true });
-    const coverageFolder = core.getInput('coverage-folder', { required: true });
-    const coverageBaseFolder = core.getInput('coverage-base-folder');
-    const noCoverageRan = core.getInput('no-coverage-ran') === 'true';
-    const hideCoverageReports = core.getInput('hide-coverage-reports') === 'true';
-    const hideUnchanged = core.getInput('hide-unchanged') === 'true';
-
-    const commentTitle = core.getInput('comment-title') || 'Coverage Report';
-    const updateCommentFlag = core.getInput('update-comment') === 'true';
-    const includeSummary = core.getInput('include-summary') === 'true';
-    const detailedCoverage = core.getInput('detailed-coverage') === 'true';
-
-    // Skip if no coverage ran
-    if (noCoverageRan) {
-      core.info('No coverage was generated, skipping coverage report');
-      const octokit = github.getOctokit(token);
-
-      if (github.context.eventName === 'pull_request') {
-        const comment = `## ${commentTitle}\n\n⚠️ No coverage data was generated for this build.`;
-        await postComment(octokit, github.context, comment);
-      }
-
-      return;
-    }
-
-    // Parse current coverage
-    core.info(`Parsing coverage from: ${coverageFolder}`);
-
-    // Debug: List files in coverage directory
-    if (fs.existsSync(coverageFolder)) {
-      core.info(`Coverage folder exists: ${coverageFolder}`);
-      const listFilesRecursively = (dir, prefix = '') => {
-        try {
-          const items = fs.readdirSync(dir);
-          items.forEach((item) => {
-            const fullPath = path.join(dir, item);
-            const stat = fs.statSync(fullPath);
-            if (stat.isDirectory()) {
-              core.info(`${prefix}📁 ${item}/`);
-              listFilesRecursively(fullPath, prefix + '  ');
-            } else {
-              core.info(`${prefix}📄 ${item}`);
-            }
-          });
-        } catch (error) {
-          core.warning(`Failed to list files in ${dir}: ${error.message}`);
-        }
-      };
-
-      core.info('Files in coverage directory:');
-      listFilesRecursively(coverageFolder);
-    } else {
-      core.warning(`Coverage folder does not exist: ${coverageFolder}`);
-    }
-
-    const currentCoverage = await parseCoverage(coverageFolder);
-
-    // Debug: Log parsed projects
-    core.info(`Total projects parsed: ${Object.keys(currentCoverage).length}`);
-    Object.keys(currentCoverage).forEach((project) => {
-      const coverage = currentCoverage[project].summary.lines?.pct || 'N/A';
-      core.info(`  - ${project}: ${coverage}% lines coverage`);
-    });
-
-    if (!currentCoverage || Object.keys(currentCoverage).length === 0) {
-      throw new Error(`No coverage data found in ${coverageFolder}`);
-    }
-
-    // Parse base coverage if provided
-    let baseCoverage = null;
-    if (coverageBaseFolder && fs.existsSync(coverageBaseFolder)) {
-      core.info(`Parsing base coverage from: ${coverageBaseFolder}`);
-      try {
-        baseCoverage = await parseCoverage(coverageBaseFolder);
-      } catch (error) {
-        core.warning(`Failed to parse base coverage: ${error.message}`);
-      }
-    }
-
-    // Calculate total coverage
-    const totalCoverage = calculateTotalCoverage(currentCoverage);
-    core.info(`Total coverage: ${totalCoverage.toFixed(2)}%`);
-
-    // Set outputs
-    core.setOutput('total-coverage', totalCoverage.toFixed(2));
-
-    if (baseCoverage) {
-      const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
-      const coverageDiff = totalCoverage - baseTotalCoverage;
-      core.setOutput('coverage-changed', coverageDiff !== 0 ? 'true' : 'false');
-      core.setOutput(
-        'coverage-diff',
-        coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2)
-      );
-    }
-
-    // Generate report for PR comments
-    if (github.context.eventName === 'pull_request') {
-      const report = generateReport({
-        currentCoverage,
-        baseCoverage,
-        totalCoverage,
-        commentTitle,
-        hideCoverageReports,
-        hideUnchanged,
-        includeSummary,
-        detailedCoverage
-      });
-
-      const octokit = github.getOctokit(token);
-
-      if (updateCommentFlag) {
-        const existingComment = await findExistingComment(octokit, github.context, commentTitle);
-        if (existingComment) {
-          await updateComment(octokit, github.context, existingComment.id, report);
-        } else {
-          await postComment(octokit, github.context, report);
-        }
-      } else {
-        await postComment(octokit, github.context, report);
-      }
-    }
-  } catch (error) {
-    core.setFailed(error.message);
-  }
-}
-
-function calculateTotalCoverage(coverage) {
-  let totalLines = 0;
-  let coveredLines = 0;
-
-  for (const [, projectData] of Object.entries(coverage)) {
-    if (projectData.summary) {
-      totalLines += projectData.summary.lines?.total || 0;
-      coveredLines += projectData.summary.lines?.covered || 0;
-    }
-  }
-
-  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
-}
-
-run();
-
-module.exports = __webpack_exports__;
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module is referenced by other modules so it can't be inlined
+/******/ 	var __webpack_exports__ = __nccwpck_require__(5105);
+/******/ 	module.exports = __webpack_exports__;
+/******/ 	
 /******/ })()
 ;
 //# sourceMappingURL=index.js.map

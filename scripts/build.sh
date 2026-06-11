@@ -2,7 +2,7 @@
 
 set -e
 
-echo "🏗️  Building Nx Code Coverage Action..."
+echo "🏗️  Building Monorepo Code Coverage Reporter..."
 
 # Clean dist directory
 echo "🧹 Cleaning dist directory..."
