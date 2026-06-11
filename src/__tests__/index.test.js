@@ -157,6 +157,25 @@ describe('outputs with base coverage', () => {
     expect(core.setOutput).toHaveBeenCalledWith('coverage-diff', '-10.00');
     expect(core.setOutput).toHaveBeenCalledWith('coverage-changed', 'true');
   });
+
+  it('skips comparison outputs when no projects overlap', async () => {
+    const fs = require('fs');
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    setInputs({
+      'github-token': 'tok',
+      'coverage-folder': './coverage',
+      'coverage-base-folder': './coverage-base'
+    });
+    parseCoverage
+      .mockResolvedValueOnce({ 'apps/new': project(100, 90) })
+      .mockResolvedValueOnce({ 'apps/old': project(100, 80) });
+
+    await run();
+
+    expect(core.setOutput).toHaveBeenCalledWith('total-coverage', '90.00');
+    expect(core.setOutput).not.toHaveBeenCalledWith('coverage-changed', expect.anything());
+    expect(core.setOutput).not.toHaveBeenCalledWith('coverage-diff', expect.anything());
+  });
 });
 
 describe('boolean input defaults', () => {

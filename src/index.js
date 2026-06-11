@@ -105,15 +105,22 @@ async function run() {
       const commonProjects = Object.keys(currentCoverage).filter(
         (projectName) => projectName in baseCoverage
       );
-      const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
-      const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
-      const coverageDiff = comparableCurrent - comparableBase;
 
-      core.setOutput('coverage-changed', Math.abs(coverageDiff) >= 0.01 ? 'true' : 'false');
-      core.setOutput(
-        'coverage-diff',
-        coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2)
-      );
+      if (commonProjects.length > 0) {
+        const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
+        const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
+        const coverageDiff = comparableCurrent - comparableBase;
+
+        core.setOutput('coverage-changed', Math.abs(coverageDiff) >= 0.01 ? 'true' : 'false');
+        core.setOutput(
+          'coverage-diff',
+          coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2)
+        );
+      } else {
+        core.info(
+          'No projects exist in both current and base coverage, skipping comparison outputs'
+        );
+      }
     }
 
     // Generate report for PR comments

@@ -42,6 +42,12 @@ describe('commentMarker', () => {
       '<!-- monorepo-code-coverage-reporter:Coverage Report -->'
     );
   });
+
+  it('collapses double hyphens so the title cannot break the HTML comment', () => {
+    expect(commentMarker('Coverage -- Report')).toBe(
+      '<!-- monorepo-code-coverage-reporter:Coverage - Report -->'
+    );
+  });
 });
 
 describe('findExistingComment', () => {

@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The coverage-changed output uses a 0.01 percentage-point threshold instead of exact float comparison
 - The Statements column consistently falls back to lines data when a summary lacks statements; statements-only changes now appear in the detailed breakdown
 - Projects with 0% line coverage are no longer logged as N/A
+- `coverage-changed`/`coverage-diff` outputs are no longer emitted when no projects exist in both current and base coverage
+- Missing pct values in accepted coverage summaries are derived from raw counts instead of rendering as N/A
+- Comment titles containing double hyphens no longer produce a malformed hidden marker
 
 ### Changed
 

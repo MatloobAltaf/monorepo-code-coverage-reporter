@@ -127,6 +127,30 @@ describe('coverage-parser', () => {
 
       expect(Object.keys(result)).toEqual(['apps/good']);
     });
+
+    it('derives missing pct values from raw counts', async () => {
+      writeSummary('apps/no-pct', {
+        total: {
+          lines: { total: 200, covered: 50 },
+          functions: { total: 0, covered: 0 }
+        }
+      });
+
+      const result = await parseCoverage(tmpDir);
+
+      expect(result['apps/no-pct'].summary.lines.pct).toBe(25);
+      expect(result['apps/no-pct'].summary.functions.pct).toBe(100);
+    });
+
+    it('leaves existing pct values untouched', async () => {
+      writeSummary('apps/has-pct', {
+        total: { lines: { total: 200, covered: 50, pct: 25 } }
+      });
+
+      const result = await parseCoverage(tmpDir);
+
+      expect(result['apps/has-pct'].summary.lines.pct).toBe(25);
+    });
   });
 
   describe('calculateTotalCoverage', () => {

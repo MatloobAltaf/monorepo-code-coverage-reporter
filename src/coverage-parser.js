@@ -58,6 +58,27 @@ function getProjectPath(relativeFile) {
 }
 
 /**
+ * Fill in missing pct values from raw counts, matching the istanbul
+ * convention of reporting 100% when there is nothing to cover.
+ * @param {Object} summary - Valid totals summary
+ * @returns {Object} Summary with pct present for every counted metric
+ */
+function normalizeSummary(summary) {
+  for (const metric of ['lines', 'statements', 'functions', 'branches']) {
+    const data = summary[metric];
+    if (
+      data &&
+      typeof data.total === 'number' &&
+      typeof data.covered === 'number' &&
+      typeof data.pct !== 'number'
+    ) {
+      data.pct = data.total === 0 ? 100 : (data.covered / data.total) * 100;
+    }
+  }
+  return summary;
+}
+
+/**
  * Extract the aggregated totals from a coverage-summary.json payload.
  * Accepts the standard istanbul shape ({ total: {...} }) and, for backward
  * compatibility, a flat summary object that itself carries line totals.
@@ -69,10 +90,10 @@ function extractTotalSummary(jsonData) {
     return null;
   }
   if (isValidSummary(jsonData.total)) {
-    return jsonData.total;
+    return normalizeSummary(jsonData.total);
   }
   if (isValidSummary(jsonData)) {
-    return jsonData;
+    return normalizeSummary(jsonData);
   }
   return null;
 }

@@ -30211,11 +30211,14 @@ const core = __nccwpck_require__(7484);
  * Hidden HTML marker prefixed to every comment this action creates.
  * Lets later runs find their own comment reliably, regardless of which
  * token type posted it (github-actions bot, GitHub App, or PAT).
+ * Double hyphens are collapsed to a single hyphen because `--` would
+ * terminate the HTML comment early and produce a malformed marker.
  * @param {string} commentTitle - Configured comment title
  * @returns {string} Marker line
  */
 function commentMarker(commentTitle) {
-  return `<!-- monorepo-code-coverage-reporter:${commentTitle} -->`;
+  const safeTitle = commentTitle.replace(/-{2,}/g, '-');
+  return `<!-- monorepo-code-coverage-reporter:${safeTitle} -->`;
 }
 
 /**
@@ -30414,6 +30417,27 @@ function getProjectPath(relativeFile) {
 }
 
 /**
+ * Fill in missing pct values from raw counts, matching the istanbul
+ * convention of reporting 100% when there is nothing to cover.
+ * @param {Object} summary - Valid totals summary
+ * @returns {Object} Summary with pct present for every counted metric
+ */
+function normalizeSummary(summary) {
+  for (const metric of ['lines', 'statements', 'functions', 'branches']) {
+    const data = summary[metric];
+    if (
+      data &&
+      typeof data.total === 'number' &&
+      typeof data.covered === 'number' &&
+      typeof data.pct !== 'number'
+    ) {
+      data.pct = data.total === 0 ? 100 : (data.covered / data.total) * 100;
+    }
+  }
+  return summary;
+}
+
+/**
  * Extract the aggregated totals from a coverage-summary.json payload.
  * Accepts the standard istanbul shape ({ total: {...} }) and, for backward
  * compatibility, a flat summary object that itself carries line totals.
@@ -30425,10 +30449,10 @@ function extractTotalSummary(jsonData) {
     return null;
   }
   if (isValidSummary(jsonData.total)) {
-    return jsonData.total;
+    return normalizeSummary(jsonData.total);
   }
   if (isValidSummary(jsonData)) {
-    return jsonData;
+    return normalizeSummary(jsonData);
   }
   return null;
 }
@@ -30641,15 +30665,22 @@ async function run() {
       const commonProjects = Object.keys(currentCoverage).filter(
         (projectName) => projectName in baseCoverage
       );
-      const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
-      const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
-      const coverageDiff = comparableCurrent - comparableBase;
 
-      core.setOutput('coverage-changed', Math.abs(coverageDiff) >= 0.01 ? 'true' : 'false');
-      core.setOutput(
-        'coverage-diff',
-        coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2)
-      );
+      if (commonProjects.length > 0) {
+        const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
+        const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
+        const coverageDiff = comparableCurrent - comparableBase;
+
+        core.setOutput('coverage-changed', Math.abs(coverageDiff) >= 0.01 ? 'true' : 'false');
+        core.setOutput(
+          'coverage-diff',
+          coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2)
+        );
+      } else {
+        core.info(
+          'No projects exist in both current and base coverage, skipping comparison outputs'
+        );
+      }
     }
 
     // Generate report for PR comments
@@ -30751,7 +30782,7 @@ function generateSummary(currentCoverage, baseCoverage, totalCoverage) {
       const sign = diff > 0 ? '+' : '';
 
       summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${comparableBase.toFixed(2)}%`;
-      if (commonProjects.length < Object.keys(currentCoverage).length) {
+      if (commonProjects.length < Object.keys(currentCoverage || {}).length) {
         summary += `, compared across ${commonProjects.length} project(s) present in both runs`;
       }
       summary += ')\n\n';

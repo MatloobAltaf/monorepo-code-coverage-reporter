@@ -4,11 +4,14 @@ const core = require('@actions/core');
  * Hidden HTML marker prefixed to every comment this action creates.
  * Lets later runs find their own comment reliably, regardless of which
  * token type posted it (github-actions bot, GitHub App, or PAT).
+ * Double hyphens are collapsed to a single hyphen because `--` would
+ * terminate the HTML comment early and produce a malformed marker.
  * @param {string} commentTitle - Configured comment title
  * @returns {string} Marker line
  */
 function commentMarker(commentTitle) {
-  return `<!-- monorepo-code-coverage-reporter:${commentTitle} -->`;
+  const safeTitle = commentTitle.replace(/-{2,}/g, '-');
+  return `<!-- monorepo-code-coverage-reporter:${safeTitle} -->`;
 }
 
 /**

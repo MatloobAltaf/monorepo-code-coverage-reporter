@@ -64,7 +64,7 @@ function generateSummary(currentCoverage, baseCoverage, totalCoverage) {
       const sign = diff > 0 ? '+' : '';
 
       summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${comparableBase.toFixed(2)}%`;
-      if (commonProjects.length < Object.keys(currentCoverage).length) {
+      if (commonProjects.length < Object.keys(currentCoverage || {}).length) {
         summary += `, compared across ${commonProjects.length} project(s) present in both runs`;
       }
       summary += ')\n\n';

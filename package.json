@@ -21,7 +21,7 @@
   },
   "homepage": "https://github.com/MatloobAltaf/monorepo-code-coverage-reporter#readme",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12.0"
   },
   "keywords": [
     "github-actions",
