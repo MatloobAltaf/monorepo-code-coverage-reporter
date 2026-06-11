@@ -102,7 +102,7 @@ describe('report-generator', () => {
 
       expect(result).toContain('## Coverage Report');
       expect(result).toContain('### Overall Coverage: 85.00%');
-      expect(result).not.toContain('### Coverage by Project');
+      expect(result).not.toContain('### 🔄 Individual App/Library Coverage');
     });
 
     it('should hide summary when requested', () => {
@@ -159,7 +159,7 @@ describe('report-generator', () => {
 
       expect(result).toContain('🔄 Individual App/Library Coverage Changes');
       expect(result).not.toContain('*85/100*');
-      expect(result).not.toContain('📋 Detailed Coverage Breakdown');
+      expect(result).not.toContain('📑 Detailed Coverage Breakdown');
     });
   });
 
@@ -487,6 +487,73 @@ describe('report-generator', () => {
       expect(generatedComment).toContain('(+5.00%)');
       expect(generatedComment).toContain('(+10.00%)');
       expect(generatedComment).toContain('(+5.00%)');
+    });
+  });
+
+  describe('statements fallback', () => {
+    it('falls back to lines data when statements are missing in enhanced rows', () => {
+      const projectDiff = {
+        status: 'modified',
+        current: {
+          lines: { pct: 85, covered: 85, total: 100 },
+          functions: { pct: 90, covered: 18, total: 20 },
+          branches: { pct: 80, covered: 40, total: 50 }
+        },
+        base: {
+          lines: { pct: 80, covered: 80, total: 100 },
+          functions: { pct: 85, covered: 17, total: 20 },
+          branches: { pct: 75, covered: 37, total: 50 }
+        },
+        diff: { lines: 5, functions: 5, branches: 5, statements: 5 }
+      };
+
+      const result = generateEnhancedProjectRow('apps/frontend', projectDiff);
+
+      expect(result).not.toContain('*0/0*');
+      expect(result).toContain('*85/100*');
+    });
+
+    it('falls back to lines data for added projects without statements', () => {
+      const projectDiff = {
+        status: 'added',
+        current: {
+          lines: { pct: 85, covered: 85, total: 100 },
+          functions: { pct: 90, covered: 18, total: 20 },
+          branches: { pct: 80, covered: 40, total: 50 }
+        }
+      };
+
+      const result = generateEnhancedProjectRow('apps/frontend', projectDiff);
+
+      expect(result).not.toContain('N/A');
+    });
+  });
+
+  describe('statements-only changes', () => {
+    it('renders a statements bullet instead of an empty changes stanza', () => {
+      const diff = {
+        'apps/frontend': {
+          status: 'modified',
+          current: {
+            lines: { pct: 85, covered: 85, total: 100 },
+            functions: { pct: 90, covered: 18, total: 20 },
+            branches: { pct: 80, covered: 40, total: 50 },
+            statements: { pct: 90, covered: 90, total: 100 }
+          },
+          base: {
+            lines: { pct: 85, covered: 85, total: 100 },
+            functions: { pct: 90, covered: 18, total: 20 },
+            branches: { pct: 80, covered: 40, total: 50 },
+            statements: { pct: 80, covered: 80, total: 100 }
+          },
+          diff: { lines: 0, functions: 0, branches: 0, statements: 10 }
+        }
+      };
+
+      const result = generateDetailedBreakdown(diff, false);
+
+      expect(result).toContain('🔄 **Coverage changes detected**');
+      expect(result).toContain('**Statements:** 90.00% (+10.00%) ⬆️');
     });
   });
 });
