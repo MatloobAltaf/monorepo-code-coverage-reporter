@@ -27,7 +27,7 @@ const core = require('@actions/core');
 const { upsertComment } = require('../comment-handler');
 const { parseCoverage } = require('../coverage-parser');
 const { generateReport } = require('../report-generator');
-const { run } = require('../index');
+const { run, getBooleanInput } = require('../index');
 
 // Captured before any test or beforeEach runs; run() calls core.getInput
 // synchronously, so a module that executed run() on import leaves calls here.
@@ -138,5 +138,61 @@ describe('outputs with base coverage', () => {
     await run();
 
     expect(core.setOutput).toHaveBeenCalledWith('coverage-changed', 'false');
+  });
+
+  it('formats a negative coverage-diff without a plus sign', async () => {
+    const fs = require('fs');
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    setInputs({
+      'github-token': 'tok',
+      'coverage-folder': './coverage',
+      'coverage-base-folder': './coverage-base'
+    });
+    parseCoverage
+      .mockResolvedValueOnce({ 'apps/a': project(100, 80) })
+      .mockResolvedValueOnce({ 'apps/a': project(100, 90) });
+
+    await run();
+
+    expect(core.setOutput).toHaveBeenCalledWith('coverage-diff', '-10.00');
+    expect(core.setOutput).toHaveBeenCalledWith('coverage-changed', 'true');
+  });
+});
+
+describe('boolean input defaults', () => {
+  it('defaults update-comment to true when the input is empty', async () => {
+    setInputs({
+      'github-token': 'tok',
+      'coverage-folder': './coverage',
+      'no-coverage-ran': 'true'
+    });
+
+    await run();
+
+    expect(upsertComment.mock.calls[0][4]).toBe(true);
+  });
+
+  it('parses mixed-case booleans', async () => {
+    setInputs({
+      'github-token': 'tok',
+      'coverage-folder': './coverage',
+      'no-coverage-ran': 'True'
+    });
+
+    await run();
+
+    expect(parseCoverage).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the provided default on empty input', () => {
+    core.getInput.mockReturnValue('');
+    expect(getBooleanInput('x', true)).toBe(true);
+    expect(getBooleanInput('x', false)).toBe(false);
+  });
+
+  it('warns and treats unrecognized values as false', () => {
+    core.getInput.mockReturnValue('yes');
+    expect(getBooleanInput('x', true)).toBe(false);
+    expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('expected a boolean'));
   });
 });

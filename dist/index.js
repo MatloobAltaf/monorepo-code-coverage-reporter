@@ -30537,10 +30537,33 @@ module.exports = {
 const core = __nccwpck_require__(7484);
 const github = __nccwpck_require__(3228);
 const fs = __nccwpck_require__(9896);
-const path = __nccwpck_require__(6928);
 const { parseCoverage, calculateTotalCoverage } = __nccwpck_require__(103);
 const { generateReport } = __nccwpck_require__(1187);
 const { upsertComment } = __nccwpck_require__(9841);
+
+/**
+ * Read a boolean input, falling back to the action.yml default when unset.
+ * GitHub injects action.yml defaults in real runs; the fallback matters for
+ * direct invocations and tests.
+ * @param {string} name - Input name
+ * @param {boolean} defaultValue - Default when the input is empty
+ * @returns {boolean} Parsed input
+ */
+function getBooleanInput(name, defaultValue) {
+  const raw = core.getInput(name);
+  if (raw === '') {
+    return defaultValue;
+  }
+  const lowered = raw.toLowerCase();
+  if (lowered === 'true') {
+    return true;
+  }
+  if (lowered === 'false') {
+    return false;
+  }
+  core.warning(`Input "${name}" expected a boolean, got "${raw}"; treating as false`);
+  return false;
+}
 
 async function run() {
   try {
@@ -30548,14 +30571,14 @@ async function run() {
     const token = core.getInput('github-token', { required: true });
     const coverageFolder = core.getInput('coverage-folder', { required: true });
     const coverageBaseFolder = core.getInput('coverage-base-folder');
-    const noCoverageRan = core.getInput('no-coverage-ran') === 'true';
-    const hideCoverageReports = core.getInput('hide-coverage-reports') === 'true';
-    const hideUnchanged = core.getInput('hide-unchanged') === 'true';
+    const noCoverageRan = getBooleanInput('no-coverage-ran', false);
+    const hideCoverageReports = getBooleanInput('hide-coverage-reports', false);
+    const hideUnchanged = getBooleanInput('hide-unchanged', false);
 
     const commentTitle = core.getInput('comment-title') || 'Coverage Report';
-    const updateCommentFlag = core.getInput('update-comment') === 'true';
-    const includeSummary = core.getInput('include-summary') === 'true';
-    const detailedCoverage = core.getInput('detailed-coverage') === 'true';
+    const updateCommentFlag = getBooleanInput('update-comment', true);
+    const includeSummary = getBooleanInput('include-summary', true);
+    const detailedCoverage = getBooleanInput('detailed-coverage', true);
 
     // Skip if no coverage ran
     if (noCoverageRan) {
@@ -30573,40 +30596,12 @@ async function run() {
     // Parse current coverage
     core.info(`Parsing coverage from: ${coverageFolder}`);
 
-    // Debug: List files in coverage directory
-    if (fs.existsSync(coverageFolder)) {
-      core.info(`Coverage folder exists: ${coverageFolder}`);
-      const listFilesRecursively = (dir, prefix = '') => {
-        try {
-          const items = fs.readdirSync(dir);
-          items.forEach((item) => {
-            const fullPath = path.join(dir, item);
-            const stat = fs.statSync(fullPath);
-            if (stat.isDirectory()) {
-              core.info(`${prefix}📁 ${item}/`);
-              listFilesRecursively(fullPath, `${prefix}  `);
-            } else {
-              core.info(`${prefix}📄 ${item}`);
-            }
-          });
-        } catch (error) {
-          core.warning(`Failed to list files in ${dir}: ${error.message}`);
-        }
-      };
-
-      core.info('Files in coverage directory:');
-      listFilesRecursively(coverageFolder);
-    } else {
-      core.warning(`Coverage folder does not exist: ${coverageFolder}`);
-    }
-
     const currentCoverage = await parseCoverage(coverageFolder);
 
-    // Debug: Log parsed projects
     core.info(`Total projects parsed: ${Object.keys(currentCoverage).length}`);
     Object.keys(currentCoverage).forEach((project) => {
-      const coverage = currentCoverage[project].summary.lines?.pct || 'N/A';
-      core.info(`  - ${project}: ${coverage}% lines coverage`);
+      const pct = currentCoverage[project].summary.lines?.pct;
+      core.info(`  - ${project}: ${typeof pct === 'number' ? `${pct}%` : 'N/A'} lines coverage`);
     });
 
     if (!currentCoverage || Object.keys(currentCoverage).length === 0) {
@@ -30678,7 +30673,7 @@ async function run() {
   }
 }
 
-module.exports = { run };
+module.exports = { run, getBooleanInput };
 
 if (require.main === require.cache[eval('__filename')]) {
   run();
