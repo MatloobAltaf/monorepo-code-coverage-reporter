@@ -222,6 +222,16 @@ const buildRuleset = (branch: "develop" | "main") => ({
 	name: branch,
 	target: "branch" as const,
 	enforcement: "active" as const,
+	/**
+	 * actor_id 5 is GitHub's built-in "Repository admin" role.
+	 */
+	bypass_actors: [
+		{
+			actor_id: 5,
+			actor_type: "RepositoryRole" as const,
+			bypass_mode: "always" as const,
+		},
+	],
 	conditions: { ref_name: { include: [`refs/heads/${branch}`], exclude: [] } },
 	rules: [
 		{
