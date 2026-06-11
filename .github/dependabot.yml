@@ -1,0 +1,19 @@
+version: 2
+
+# Runtime-dependency bumps (the production group) change the ncc bundle, so
+# the dist-freshness CI gate fails until someone runs `npm run build` and
+# commits dist/ on the PR branch. That failure is intentional, not flaky.
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+      runtime-dependencies:
+        dependency-type: production
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
