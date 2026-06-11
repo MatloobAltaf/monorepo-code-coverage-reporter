@@ -7,7 +7,8 @@
     "build": "ncc build src/index.js -o dist --source-map --license licenses.txt",
     "test": "jest",
     "lint": "eslint src/**/*.js",
-    "format": "prettier --write src/**/*.js"
+    "format": "prettier --write src/**/*.js",
+    "configure-repo": "zx scripts/configure-repo.ts"
   },
   "repository": {
     "type": "git",
@@ -29,9 +30,11 @@
     "glob": "^10.3.10"
   },
   "devDependencies": {
+    "@clack/prompts": "^1.5.1",
     "@vercel/ncc": "^0.38.1",
     "eslint": "^8.57.0",
     "jest": "^29.7.0",
-    "prettier": "^3.2.5"
+    "prettier": "^3.2.5",
+    "zx": "^8.8.5"
   }
 }
