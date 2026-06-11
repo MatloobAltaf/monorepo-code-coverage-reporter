@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseCoverage } = require('./coverage-parser');
 const { generateReport } = require('./report-generator');
-const { postComment, updateComment, findExistingComment } = require('./comment-handler');
+const { upsertComment } = require('./comment-handler');
 
 async function run() {
   try {
@@ -24,11 +24,11 @@ async function run() {
     // Skip if no coverage ran
     if (noCoverageRan) {
       core.info('No coverage was generated, skipping coverage report');
-      const octokit = github.getOctokit(token);
 
       if (github.context.eventName === 'pull_request') {
-        const comment = `## ${commentTitle}\n\n⚠️ No coverage data was generated for this build.`;
-        await postComment(octokit, github.context, comment);
+        const octokit = github.getOctokit(token);
+        const body = `## ${commentTitle}\n\n⚠️ No coverage data was generated for this build.`;
+        await upsertComment(octokit, github.context, commentTitle, body, updateCommentFlag);
       }
 
       return;
@@ -119,17 +119,7 @@ async function run() {
       });
 
       const octokit = github.getOctokit(token);
-
-      if (updateCommentFlag) {
-        const existingComment = await findExistingComment(octokit, github.context, commentTitle);
-        if (existingComment) {
-          await updateComment(octokit, github.context, existingComment.id, report);
-        } else {
-          await postComment(octokit, github.context, report);
-        }
-      } else {
-        await postComment(octokit, github.context, report);
-      }
+      await upsertComment(octokit, github.context, commentTitle, report, updateCommentFlag);
     }
   } catch (error) {
     core.setFailed(error.message);
@@ -150,4 +140,8 @@ function calculateTotalCoverage(coverage) {
   return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
 }
 
-run();
+module.exports = { run };
+
+if (require.main === module) {
+  run();
+}

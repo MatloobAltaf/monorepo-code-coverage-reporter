@@ -30203,18 +30203,31 @@ function wrappy (fn, cb) {
 /***/ }),
 
 /***/ 9841:
-/***/ ((module) => {
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const core = __nccwpck_require__(7484);
+
+/**
+ * Hidden HTML marker prefixed to every comment this action creates.
+ * Lets later runs find their own comment reliably, regardless of which
+ * token type posted it (github-actions bot, GitHub App, or PAT).
+ * @param {string} commentTitle - Configured comment title
+ * @returns {string} Marker line
+ */
+function commentMarker(commentTitle) {
+  return `<!-- monorepo-code-coverage-reporter:${commentTitle} -->`;
+}
 
 /**
  * Post a new comment on a pull request
  * @param {Object} octokit - GitHub API client
  * @param {Object} context - GitHub context
  * @param {string} body - Comment body
- * @returns {Promise<Object>} Comment response
+ * @returns {Promise<Object|null>} Comment response
  */
 async function postComment(octokit, context, body) {
   if (context.eventName !== 'pull_request') {
-    console.log('Not a pull request event, skipping comment');
+    core.info('Not a pull request event, skipping comment');
     return null;
   }
 
@@ -30226,10 +30239,10 @@ async function postComment(octokit, context, body) {
       body
     });
 
-    console.log(`Posted coverage comment: ${response.data.html_url}`);
+    core.info(`Posted coverage comment: ${response.data.html_url}`);
     return response.data;
   } catch (error) {
-    console.error('Failed to post comment:', error.message);
+    core.error(`Failed to post comment: ${error.message}`);
     throw error;
   }
 }
@@ -30251,16 +30264,20 @@ async function updateComment(octokit, context, commentId, body) {
       body
     });
 
-    console.log(`Updated coverage comment: ${response.data.html_url}`);
+    core.info(`Updated coverage comment: ${response.data.html_url}`);
     return response.data;
   } catch (error) {
-    console.error('Failed to update comment:', error.message);
+    core.error(`Failed to update comment: ${error.message}`);
     throw error;
   }
 }
 
 /**
- * Find existing coverage comment by title
+ * Find the existing coverage comment for a given title.
+ * Scans ALL comments (paginated). Prefers the hidden marker; falls back to
+ * the legacy title match for comments created by older action versions.
+ * API failures are propagated to the caller so the run fails instead of
+ * creating a duplicate comment.
  * @param {Object} octokit - GitHub API client
  * @param {Object} context - GitHub context
  * @param {string} commentTitle - Title to search for
@@ -30271,80 +30288,64 @@ async function findExistingComment(octokit, context, commentTitle) {
     return null;
   }
 
-  try {
-    const comments = await octokit.rest.issues.listComments({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      issue_number: context.payload.pull_request.number
-    });
+  const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    issue_number: context.payload.pull_request.number,
+    per_page: 100
+  });
 
-    // Look for comments that start with the comment title
-    const existingComment = comments.data.find(
-      (comment) => comment.body.includes(`## ${commentTitle}`) && comment.user.type === 'Bot'
-    );
-
-    if (existingComment) {
-      console.log(`Found existing coverage comment: ${existingComment.id}`);
-      return existingComment;
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Failed to find existing comment:', error.message);
-    return null;
+  const marker = commentMarker(commentTitle);
+  const markedComment = comments.find((comment) => comment.body?.includes(marker));
+  if (markedComment) {
+    core.info(`Found existing coverage comment: ${markedComment.id}`);
+    return markedComment;
   }
+
+  const legacyComment = comments.find(
+    (comment) => comment.body?.includes(`## ${commentTitle}`) && comment.user?.type === 'Bot'
+  );
+  if (legacyComment) {
+    core.info(`Found existing legacy coverage comment: ${legacyComment.id}`);
+    return legacyComment;
+  }
+
+  return null;
 }
 
 /**
- * Delete old coverage comments to avoid spam
+ * Create or update the coverage comment for a pull request.
  * @param {Object} octokit - GitHub API client
  * @param {Object} context - GitHub context
- * @param {string} commentTitle - Title to search for
- * @returns {Promise<number>} Number of deleted comments
+ * @param {string} commentTitle - Configured comment title
+ * @param {string} body - Comment body (without marker)
+ * @param {boolean} updateExisting - Update an existing comment when found
+ * @returns {Promise<Object|null>} Comment response
  */
-async function deleteOldComments(octokit, context, commentTitle) {
+async function upsertComment(octokit, context, commentTitle, body, updateExisting) {
   if (context.eventName !== 'pull_request') {
-    return 0;
+    core.info('Not a pull request event, skipping comment');
+    return null;
   }
 
-  try {
-    const comments = await octokit.rest.issues.listComments({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      issue_number: context.payload.pull_request.number
-    });
+  const markedBody = `${commentMarker(commentTitle)}\n${body}`;
 
-    const coverageComments = comments.data.filter(
-      (comment) => comment.body.includes(`## ${commentTitle}`) && comment.user.type === 'Bot'
-    );
-
-    let deletedCount = 0;
-    for (const comment of coverageComments) {
-      try {
-        await octokit.rest.issues.deleteComment({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          comment_id: comment.id
-        });
-        deletedCount++;
-        console.log(`Deleted old coverage comment: ${comment.id}`);
-      } catch (deleteError) {
-        console.warn(`Failed to delete comment ${comment.id}:`, deleteError.message);
-      }
+  if (updateExisting) {
+    const existingComment = await findExistingComment(octokit, context, commentTitle);
+    if (existingComment) {
+      return updateComment(octokit, context, existingComment.id, markedBody);
     }
-
-    return deletedCount;
-  } catch (error) {
-    console.error('Failed to delete old comments:', error.message);
-    return 0;
   }
+
+  return postComment(octokit, context, markedBody);
 }
 
 module.exports = {
   postComment,
   updateComment,
   findExistingComment,
-  deleteOldComments
+  upsertComment,
+  commentMarker
 };
 
 
@@ -30467,6 +30468,160 @@ module.exports = {
   parseCoverage,
   compareCoverage
 };
+
+
+/***/ }),
+
+/***/ 5105:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const core = __nccwpck_require__(7484);
+const github = __nccwpck_require__(3228);
+const fs = __nccwpck_require__(9896);
+const path = __nccwpck_require__(6928);
+const { parseCoverage } = __nccwpck_require__(103);
+const { generateReport } = __nccwpck_require__(1187);
+const { upsertComment } = __nccwpck_require__(9841);
+
+async function run() {
+  try {
+    // Get inputs
+    const token = core.getInput('github-token', { required: true });
+    const coverageFolder = core.getInput('coverage-folder', { required: true });
+    const coverageBaseFolder = core.getInput('coverage-base-folder');
+    const noCoverageRan = core.getInput('no-coverage-ran') === 'true';
+    const hideCoverageReports = core.getInput('hide-coverage-reports') === 'true';
+    const hideUnchanged = core.getInput('hide-unchanged') === 'true';
+
+    const commentTitle = core.getInput('comment-title') || 'Coverage Report';
+    const updateCommentFlag = core.getInput('update-comment') === 'true';
+    const includeSummary = core.getInput('include-summary') === 'true';
+    const detailedCoverage = core.getInput('detailed-coverage') === 'true';
+
+    // Skip if no coverage ran
+    if (noCoverageRan) {
+      core.info('No coverage was generated, skipping coverage report');
+
+      if (github.context.eventName === 'pull_request') {
+        const octokit = github.getOctokit(token);
+        const body = `## ${commentTitle}\n\n⚠️ No coverage data was generated for this build.`;
+        await upsertComment(octokit, github.context, commentTitle, body, updateCommentFlag);
+      }
+
+      return;
+    }
+
+    // Parse current coverage
+    core.info(`Parsing coverage from: ${coverageFolder}`);
+
+    // Debug: List files in coverage directory
+    if (fs.existsSync(coverageFolder)) {
+      core.info(`Coverage folder exists: ${coverageFolder}`);
+      const listFilesRecursively = (dir, prefix = '') => {
+        try {
+          const items = fs.readdirSync(dir);
+          items.forEach((item) => {
+            const fullPath = path.join(dir, item);
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+              core.info(`${prefix}📁 ${item}/`);
+              listFilesRecursively(fullPath, `${prefix}  `);
+            } else {
+              core.info(`${prefix}📄 ${item}`);
+            }
+          });
+        } catch (error) {
+          core.warning(`Failed to list files in ${dir}: ${error.message}`);
+        }
+      };
+
+      core.info('Files in coverage directory:');
+      listFilesRecursively(coverageFolder);
+    } else {
+      core.warning(`Coverage folder does not exist: ${coverageFolder}`);
+    }
+
+    const currentCoverage = await parseCoverage(coverageFolder);
+
+    // Debug: Log parsed projects
+    core.info(`Total projects parsed: ${Object.keys(currentCoverage).length}`);
+    Object.keys(currentCoverage).forEach((project) => {
+      const coverage = currentCoverage[project].summary.lines?.pct || 'N/A';
+      core.info(`  - ${project}: ${coverage}% lines coverage`);
+    });
+
+    if (!currentCoverage || Object.keys(currentCoverage).length === 0) {
+      throw new Error(`No coverage data found in ${coverageFolder}`);
+    }
+
+    // Parse base coverage if provided
+    let baseCoverage = null;
+    if (coverageBaseFolder && fs.existsSync(coverageBaseFolder)) {
+      core.info(`Parsing base coverage from: ${coverageBaseFolder}`);
+      try {
+        baseCoverage = await parseCoverage(coverageBaseFolder);
+      } catch (error) {
+        core.warning(`Failed to parse base coverage: ${error.message}`);
+      }
+    }
+
+    // Calculate total coverage
+    const totalCoverage = calculateTotalCoverage(currentCoverage);
+    core.info(`Total coverage: ${totalCoverage.toFixed(2)}%`);
+
+    // Set outputs
+    core.setOutput('total-coverage', totalCoverage.toFixed(2));
+
+    if (baseCoverage) {
+      const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
+      const coverageDiff = totalCoverage - baseTotalCoverage;
+      core.setOutput('coverage-changed', coverageDiff !== 0 ? 'true' : 'false');
+      core.setOutput(
+        'coverage-diff',
+        coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2)
+      );
+    }
+
+    // Generate report for PR comments
+    if (github.context.eventName === 'pull_request') {
+      const report = generateReport({
+        currentCoverage,
+        baseCoverage,
+        totalCoverage,
+        commentTitle,
+        hideCoverageReports,
+        hideUnchanged,
+        includeSummary,
+        detailedCoverage
+      });
+
+      const octokit = github.getOctokit(token);
+      await upsertComment(octokit, github.context, commentTitle, report, updateCommentFlag);
+    }
+  } catch (error) {
+    core.setFailed(error.message);
+  }
+}
+
+function calculateTotalCoverage(coverage) {
+  let totalLines = 0;
+  let coveredLines = 0;
+
+  for (const [, projectData] of Object.entries(coverage)) {
+    if (projectData.summary) {
+      totalLines += projectData.summary.lines?.total || 0;
+      coveredLines += projectData.summary.lines?.covered || 0;
+    }
+  }
+
+  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
+}
+
+module.exports = { run };
+
+if (require.main === require.cache[eval('__filename')]) {
+  run();
+}
 
 
 /***/ }),
@@ -40801,162 +40956,13 @@ exports.LRUCache = LRUCache;
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
 /******/ 	
 /************************************************************************/
-var __webpack_exports__ = {};
-const core = __nccwpck_require__(7484);
-const github = __nccwpck_require__(3228);
-const fs = __nccwpck_require__(9896);
-const path = __nccwpck_require__(6928);
-const { parseCoverage } = __nccwpck_require__(103);
-const { generateReport } = __nccwpck_require__(1187);
-const { postComment, updateComment, findExistingComment } = __nccwpck_require__(9841);
-
-async function run() {
-  try {
-    // Get inputs
-    const token = core.getInput('github-token', { required: true });
-    const coverageFolder = core.getInput('coverage-folder', { required: true });
-    const coverageBaseFolder = core.getInput('coverage-base-folder');
-    const noCoverageRan = core.getInput('no-coverage-ran') === 'true';
-    const hideCoverageReports = core.getInput('hide-coverage-reports') === 'true';
-    const hideUnchanged = core.getInput('hide-unchanged') === 'true';
-
-    const commentTitle = core.getInput('comment-title') || 'Coverage Report';
-    const updateCommentFlag = core.getInput('update-comment') === 'true';
-    const includeSummary = core.getInput('include-summary') === 'true';
-    const detailedCoverage = core.getInput('detailed-coverage') === 'true';
-
-    // Skip if no coverage ran
-    if (noCoverageRan) {
-      core.info('No coverage was generated, skipping coverage report');
-      const octokit = github.getOctokit(token);
-
-      if (github.context.eventName === 'pull_request') {
-        const comment = `## ${commentTitle}\n\n⚠️ No coverage data was generated for this build.`;
-        await postComment(octokit, github.context, comment);
-      }
-
-      return;
-    }
-
-    // Parse current coverage
-    core.info(`Parsing coverage from: ${coverageFolder}`);
-
-    // Debug: List files in coverage directory
-    if (fs.existsSync(coverageFolder)) {
-      core.info(`Coverage folder exists: ${coverageFolder}`);
-      const listFilesRecursively = (dir, prefix = '') => {
-        try {
-          const items = fs.readdirSync(dir);
-          items.forEach((item) => {
-            const fullPath = path.join(dir, item);
-            const stat = fs.statSync(fullPath);
-            if (stat.isDirectory()) {
-              core.info(`${prefix}📁 ${item}/`);
-              listFilesRecursively(fullPath, `${prefix}  `);
-            } else {
-              core.info(`${prefix}📄 ${item}`);
-            }
-          });
-        } catch (error) {
-          core.warning(`Failed to list files in ${dir}: ${error.message}`);
-        }
-      };
-
-      core.info('Files in coverage directory:');
-      listFilesRecursively(coverageFolder);
-    } else {
-      core.warning(`Coverage folder does not exist: ${coverageFolder}`);
-    }
-
-    const currentCoverage = await parseCoverage(coverageFolder);
-
-    // Debug: Log parsed projects
-    core.info(`Total projects parsed: ${Object.keys(currentCoverage).length}`);
-    Object.keys(currentCoverage).forEach((project) => {
-      const coverage = currentCoverage[project].summary.lines?.pct || 'N/A';
-      core.info(`  - ${project}: ${coverage}% lines coverage`);
-    });
-
-    if (!currentCoverage || Object.keys(currentCoverage).length === 0) {
-      throw new Error(`No coverage data found in ${coverageFolder}`);
-    }
-
-    // Parse base coverage if provided
-    let baseCoverage = null;
-    if (coverageBaseFolder && fs.existsSync(coverageBaseFolder)) {
-      core.info(`Parsing base coverage from: ${coverageBaseFolder}`);
-      try {
-        baseCoverage = await parseCoverage(coverageBaseFolder);
-      } catch (error) {
-        core.warning(`Failed to parse base coverage: ${error.message}`);
-      }
-    }
-
-    // Calculate total coverage
-    const totalCoverage = calculateTotalCoverage(currentCoverage);
-    core.info(`Total coverage: ${totalCoverage.toFixed(2)}%`);
-
-    // Set outputs
-    core.setOutput('total-coverage', totalCoverage.toFixed(2));
-
-    if (baseCoverage) {
-      const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
-      const coverageDiff = totalCoverage - baseTotalCoverage;
-      core.setOutput('coverage-changed', coverageDiff !== 0 ? 'true' : 'false');
-      core.setOutput(
-        'coverage-diff',
-        coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2)
-      );
-    }
-
-    // Generate report for PR comments
-    if (github.context.eventName === 'pull_request') {
-      const report = generateReport({
-        currentCoverage,
-        baseCoverage,
-        totalCoverage,
-        commentTitle,
-        hideCoverageReports,
-        hideUnchanged,
-        includeSummary,
-        detailedCoverage
-      });
-
-      const octokit = github.getOctokit(token);
-
-      if (updateCommentFlag) {
-        const existingComment = await findExistingComment(octokit, github.context, commentTitle);
-        if (existingComment) {
-          await updateComment(octokit, github.context, existingComment.id, report);
-        } else {
-          await postComment(octokit, github.context, report);
-        }
-      } else {
-        await postComment(octokit, github.context, report);
-      }
-    }
-  } catch (error) {
-    core.setFailed(error.message);
-  }
-}
-
-function calculateTotalCoverage(coverage) {
-  let totalLines = 0;
-  let coveredLines = 0;
-
-  for (const [, projectData] of Object.entries(coverage)) {
-    if (projectData.summary) {
-      totalLines += projectData.summary.lines?.total || 0;
-      coveredLines += projectData.summary.lines?.covered || 0;
-    }
-  }
-
-  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
-}
-
-run();
-
-module.exports = __webpack_exports__;
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module is referenced by other modules so it can't be inlined
+/******/ 	var __webpack_exports__ = __nccwpck_require__(5105);
+/******/ 	module.exports = __webpack_exports__;
+/******/ 	
 /******/ })()
 ;
 //# sourceMappingURL=index.js.map
