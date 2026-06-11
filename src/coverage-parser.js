@@ -1,41 +1,45 @@
 const fs = require('fs');
+const path = require('path');
 const core = require('@actions/core');
 const { glob } = require('glob');
 
 /**
  * Parse coverage data from a directory containing nested coverage-summary.json files
  * @param {string} coverageFolder - Path to coverage folder
- * @returns {Object} Parsed coverage data organized by project
+ * @returns {Promise<Object>} Parsed coverage data organized by project
  */
 async function parseCoverage(coverageFolder) {
-  const coverage = {};
-
   if (!fs.existsSync(coverageFolder)) {
     throw new Error(`Coverage folder not found: ${coverageFolder}`);
   }
 
-  // Find all coverage-summary.json files recursively
-  const jsonSummaryFiles = await glob(`${coverageFolder}/**/coverage-summary.json`);
+  // Scope the glob to the folder via cwd so the path itself is never
+  // interpreted as a pattern, and results come back relative.
+  const summaryFiles = await glob('**/coverage-summary.json', {
+    cwd: coverageFolder,
+    ignore: '**/node_modules/**'
+  });
+  const coverage = {};
 
-  // Parse JSON summary files
-  for (const jsonFile of jsonSummaryFiles) {
-    core.info(`Parsing ${jsonFile}`);
-
-    const projectPath = getProjectPathFromFile(jsonFile, coverageFolder);
+  for (const relativeFile of summaryFiles.sort()) {
+    const fullPath = path.join(coverageFolder, relativeFile);
+    const projectPath = getProjectPath(relativeFile);
 
     try {
-      const jsonData = JSON.parse(fs.readFileSync(jsonFile, 'utf8'));
+      const jsonData = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      const summary = extractTotalSummary(jsonData);
 
-      // Extract the total summary from coverage-summary.json
-      // The file contains a 'total' field with aggregated coverage data
-      const summary = jsonData.total || jsonData;
+      if (!summary) {
+        core.warning(`Skipping ${fullPath}: no valid coverage totals found`);
+        continue;
+      }
 
       coverage[projectPath] = {
-        summary: summary,
+        summary,
         path: projectPath
       };
     } catch (error) {
-      console.warn(`Failed to parse JSON summary file ${jsonFile}: ${error.message}`);
+      core.warning(`Failed to parse coverage summary ${fullPath}: ${error.message}`);
     }
   }
 
@@ -43,17 +47,71 @@ async function parseCoverage(coverageFolder) {
 }
 
 /**
- * Extract project path from file path relative to coverage folder
- * @param {string} filePath - Full path to coverage file
- * @param {string} coverageFolder - Base coverage folder
- * @returns {string} Project path
+ * Derive the project key from a summary file path relative to the coverage folder
+ * @param {string} relativeFile - Relative path to coverage-summary.json
+ * @returns {string} Project path key
  */
-function getProjectPathFromFile(filePath, coverageFolder) {
-  const relativePath = filePath
-    .replace(`${coverageFolder.replace('./', '')}/`, '')
-    .replace('/coverage-summary.json', '');
+function getProjectPath(relativeFile) {
+  const normalized = relativeFile.split('\\').join('/');
+  const dir = path.posix.dirname(normalized);
+  return dir === '.' ? 'root' : dir;
+}
 
-  return relativePath || 'root';
+/**
+ * Extract the aggregated totals from a coverage-summary.json payload.
+ * Accepts the standard istanbul shape ({ total: {...} }) and, for backward
+ * compatibility, a flat summary object that itself carries line totals.
+ * @param {Object} jsonData - Parsed JSON payload
+ * @returns {Object|null} Totals summary or null when invalid
+ */
+function extractTotalSummary(jsonData) {
+  if (!jsonData || typeof jsonData !== 'object') {
+    return null;
+  }
+  if (isValidSummary(jsonData.total)) {
+    return jsonData.total;
+  }
+  if (isValidSummary(jsonData)) {
+    return jsonData;
+  }
+  return null;
+}
+
+/**
+ * Check that a summary carries the numeric line totals the reporter depends on
+ * @param {Object} summary - Candidate summary object
+ * @returns {boolean} Whether the summary is usable
+ */
+function isValidSummary(summary) {
+  return Boolean(
+    summary &&
+      typeof summary === 'object' &&
+      summary.lines &&
+      typeof summary.lines.total === 'number' &&
+      typeof summary.lines.covered === 'number'
+  );
+}
+
+/**
+ * Calculate total coverage as a weighted average over raw line counts
+ * @param {Object} coverage - Parsed coverage data keyed by project
+ * @param {string[]|null} projectNames - Optional subset of projects to include
+ * @returns {number} Total coverage percentage
+ */
+function calculateTotalCoverage(coverage, projectNames = null) {
+  let totalLines = 0;
+  let coveredLines = 0;
+
+  const names = projectNames || Object.keys(coverage || {});
+  for (const name of names) {
+    const projectData = coverage ? coverage[name] : null;
+    if (projectData?.summary) {
+      totalLines += projectData.summary.lines?.total || 0;
+      coveredLines += projectData.summary.lines?.covered || 0;
+    }
+  }
+
+  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
 }
 
 /**
@@ -110,5 +168,6 @@ function compareCoverage(current, base) {
 
 module.exports = {
   parseCoverage,
-  compareCoverage
+  compareCoverage,
+  calculateTotalCoverage
 };
