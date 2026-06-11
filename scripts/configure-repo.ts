@@ -223,10 +223,7 @@ const buildRuleset = (branch: "develop" | "main") => ({
 	target: "branch" as const,
 	enforcement: "active" as const,
 	/**
-	 * actor_id 5 is GitHub's built-in "Repository admin" role. On this
-	 * personal repo only the owner holds it, so only the owner can bypass
-	 * the required checks and reviews.
-	 */
+	 * actor_id 5 is GitHub's built-in "Repository admin" role.
 	bypass_actors: [
 		{
 			actor_id: 5,
