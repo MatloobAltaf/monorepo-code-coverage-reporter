@@ -224,6 +224,7 @@ const buildRuleset = (branch: "develop" | "main") => ({
 	enforcement: "active" as const,
 	/**
 	 * actor_id 5 is GitHub's built-in "Repository admin" role.
+	 */
 	bypass_actors: [
 		{
 			actor_id: 5,
