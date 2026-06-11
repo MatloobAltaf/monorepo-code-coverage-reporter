@@ -16,7 +16,8 @@ jest.mock('../comment-handler', () => ({
 }));
 jest.mock('../coverage-parser', () => ({
   parseCoverage: jest.fn(),
-  compareCoverage: jest.requireActual('../coverage-parser').compareCoverage
+  compareCoverage: jest.requireActual('../coverage-parser').compareCoverage,
+  calculateTotalCoverage: jest.requireActual('../coverage-parser').calculateTotalCoverage
 }));
 jest.mock('../report-generator', () => ({
   generateReport: jest.fn().mockReturnValue('REPORT')
@@ -25,6 +26,7 @@ jest.mock('../report-generator', () => ({
 const core = require('@actions/core');
 const { upsertComment } = require('../comment-handler');
 const { parseCoverage } = require('../coverage-parser');
+const { generateReport } = require('../report-generator');
 const { run } = require('../index');
 
 // Captured before any test or beforeEach runs; run() calls core.getInput
@@ -35,7 +37,12 @@ function setInputs(inputs) {
   core.getInput.mockImplementation((name) => inputs[name] ?? '');
 }
 
+const project = (total, covered) => ({
+  summary: { lines: { total, covered, pct: (covered / total) * 100 } }
+});
+
 beforeEach(() => {
+  jest.restoreAllMocks();
   jest.clearAllMocks();
   setInputs({ 'github-token': 'tok', 'coverage-folder': './coverage' });
 });
@@ -76,5 +83,60 @@ describe('run with no-coverage-ran', () => {
 describe('module loading', () => {
   it('does not execute run() on import', () => {
     expect(getInputCallsAtImport).toBe(0);
+  });
+});
+
+describe('outputs with base coverage', () => {
+  it('computes coverage-diff over the intersection of projects only', async () => {
+    const fs = require('fs');
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    setInputs({
+      'github-token': 'tok',
+      'coverage-folder': './coverage',
+      'coverage-base-folder': './coverage-base'
+    });
+    parseCoverage.mockResolvedValueOnce({ 'apps/a': project(100, 90) }).mockResolvedValueOnce({
+      'apps/a': project(100, 80),
+      'apps/b': project(1000, 100)
+    });
+
+    await run();
+
+    expect(core.setOutput).toHaveBeenCalledWith('coverage-diff', '+10.00');
+    expect(core.setOutput).toHaveBeenCalledWith('coverage-changed', 'true');
+    expect(core.setOutput).toHaveBeenCalledWith('total-coverage', '90.00');
+  });
+
+  it('treats an empty base result as no base at all', async () => {
+    const fs = require('fs');
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    setInputs({
+      'github-token': 'tok',
+      'coverage-folder': './coverage',
+      'coverage-base-folder': './coverage-base'
+    });
+    parseCoverage.mockResolvedValueOnce({ 'apps/a': project(100, 90) }).mockResolvedValueOnce({});
+
+    await run();
+
+    expect(generateReport).toHaveBeenCalledWith(expect.objectContaining({ baseCoverage: null }));
+    expect(core.setOutput).not.toHaveBeenCalledWith('coverage-changed', expect.anything());
+  });
+
+  it('reports coverage-changed false for sub-epsilon drift', async () => {
+    const fs = require('fs');
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    setInputs({
+      'github-token': 'tok',
+      'coverage-folder': './coverage',
+      'coverage-base-folder': './coverage-base'
+    });
+    parseCoverage
+      .mockResolvedValueOnce({ 'apps/a': project(300000, 100000) })
+      .mockResolvedValueOnce({ 'apps/a': project(300000, 100001) });
+
+    await run();
+
+    expect(core.setOutput).toHaveBeenCalledWith('coverage-changed', 'false');
   });
 });

@@ -2,7 +2,7 @@ const core = require('@actions/core');
 const github = require('@actions/github');
 const fs = require('fs');
 const path = require('path');
-const { parseCoverage } = require('./coverage-parser');
+const { parseCoverage, calculateTotalCoverage } = require('./coverage-parser');
 const { generateReport } = require('./report-generator');
 const { upsertComment } = require('./comment-handler');
 
@@ -79,12 +79,23 @@ async function run() {
 
     // Parse base coverage if provided
     let baseCoverage = null;
-    if (coverageBaseFolder && fs.existsSync(coverageBaseFolder)) {
-      core.info(`Parsing base coverage from: ${coverageBaseFolder}`);
-      try {
-        baseCoverage = await parseCoverage(coverageBaseFolder);
-      } catch (error) {
-        core.warning(`Failed to parse base coverage: ${error.message}`);
+    if (coverageBaseFolder) {
+      if (fs.existsSync(coverageBaseFolder)) {
+        core.info(`Parsing base coverage from: ${coverageBaseFolder}`);
+        try {
+          const parsedBase = await parseCoverage(coverageBaseFolder);
+          if (Object.keys(parsedBase).length > 0) {
+            baseCoverage = parsedBase;
+          } else {
+            core.warning(
+              `Base coverage folder has no valid coverage data, skipping comparison: ${coverageBaseFolder}`
+            );
+          }
+        } catch (error) {
+          core.warning(`Failed to parse base coverage: ${error.message}`);
+        }
+      } else {
+        core.warning(`Base coverage folder not found, skipping comparison: ${coverageBaseFolder}`);
       }
     }
 
@@ -96,9 +107,14 @@ async function run() {
     core.setOutput('total-coverage', totalCoverage.toFixed(2));
 
     if (baseCoverage) {
-      const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
-      const coverageDiff = totalCoverage - baseTotalCoverage;
-      core.setOutput('coverage-changed', coverageDiff !== 0 ? 'true' : 'false');
+      const commonProjects = Object.keys(currentCoverage).filter(
+        (projectName) => projectName in baseCoverage
+      );
+      const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
+      const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
+      const coverageDiff = comparableCurrent - comparableBase;
+
+      core.setOutput('coverage-changed', Math.abs(coverageDiff) >= 0.01 ? 'true' : 'false');
       core.setOutput(
         'coverage-diff',
         coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2)
@@ -124,20 +140,6 @@ async function run() {
   } catch (error) {
     core.setFailed(error.message);
   }
-}
-
-function calculateTotalCoverage(coverage) {
-  let totalLines = 0;
-  let coveredLines = 0;
-
-  for (const [, projectData] of Object.entries(coverage)) {
-    if (projectData.summary) {
-      totalLines += projectData.summary.lines?.total || 0;
-      coveredLines += projectData.summary.lines?.covered || 0;
-    }
-  }
-
-  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
 }
 
 module.exports = { run };

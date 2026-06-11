@@ -30538,7 +30538,7 @@ const core = __nccwpck_require__(7484);
 const github = __nccwpck_require__(3228);
 const fs = __nccwpck_require__(9896);
 const path = __nccwpck_require__(6928);
-const { parseCoverage } = __nccwpck_require__(103);
+const { parseCoverage, calculateTotalCoverage } = __nccwpck_require__(103);
 const { generateReport } = __nccwpck_require__(1187);
 const { upsertComment } = __nccwpck_require__(9841);
 
@@ -30615,12 +30615,23 @@ async function run() {
 
     // Parse base coverage if provided
     let baseCoverage = null;
-    if (coverageBaseFolder && fs.existsSync(coverageBaseFolder)) {
-      core.info(`Parsing base coverage from: ${coverageBaseFolder}`);
-      try {
-        baseCoverage = await parseCoverage(coverageBaseFolder);
-      } catch (error) {
-        core.warning(`Failed to parse base coverage: ${error.message}`);
+    if (coverageBaseFolder) {
+      if (fs.existsSync(coverageBaseFolder)) {
+        core.info(`Parsing base coverage from: ${coverageBaseFolder}`);
+        try {
+          const parsedBase = await parseCoverage(coverageBaseFolder);
+          if (Object.keys(parsedBase).length > 0) {
+            baseCoverage = parsedBase;
+          } else {
+            core.warning(
+              `Base coverage folder has no valid coverage data, skipping comparison: ${coverageBaseFolder}`
+            );
+          }
+        } catch (error) {
+          core.warning(`Failed to parse base coverage: ${error.message}`);
+        }
+      } else {
+        core.warning(`Base coverage folder not found, skipping comparison: ${coverageBaseFolder}`);
       }
     }
 
@@ -30632,9 +30643,14 @@ async function run() {
     core.setOutput('total-coverage', totalCoverage.toFixed(2));
 
     if (baseCoverage) {
-      const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
-      const coverageDiff = totalCoverage - baseTotalCoverage;
-      core.setOutput('coverage-changed', coverageDiff !== 0 ? 'true' : 'false');
+      const commonProjects = Object.keys(currentCoverage).filter(
+        (projectName) => projectName in baseCoverage
+      );
+      const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
+      const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
+      const coverageDiff = comparableCurrent - comparableBase;
+
+      core.setOutput('coverage-changed', Math.abs(coverageDiff) >= 0.01 ? 'true' : 'false');
       core.setOutput(
         'coverage-diff',
         coverageDiff > 0 ? `+${coverageDiff.toFixed(2)}` : coverageDiff.toFixed(2)
@@ -30662,20 +30678,6 @@ async function run() {
   }
 }
 
-function calculateTotalCoverage(coverage) {
-  let totalLines = 0;
-  let coveredLines = 0;
-
-  for (const [, projectData] of Object.entries(coverage)) {
-    if (projectData.summary) {
-      totalLines += projectData.summary.lines?.total || 0;
-      coveredLines += projectData.summary.lines?.covered || 0;
-    }
-  }
-
-  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
-}
-
 module.exports = { run };
 
 if (require.main === require.cache[eval('__filename')]) {
@@ -30688,7 +30690,7 @@ if (require.main === require.cache[eval('__filename')]) {
 /***/ 1187:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-const { compareCoverage } = __nccwpck_require__(103);
+const { compareCoverage, calculateTotalCoverage } = __nccwpck_require__(103);
 
 /**
  * Generate a markdown coverage report
@@ -30733,21 +30735,32 @@ function generateReport(options) {
 
 /**
  * Generate coverage summary
- * @param {Object} _currentCoverage - Current coverage data (unused)
+ * @param {Object} currentCoverage - Current coverage data
  * @param {Object} baseCoverage - Base coverage data
  * @param {number} totalCoverage - Total coverage percentage
  * @returns {string} Summary markdown
  */
-function generateSummary(_currentCoverage, baseCoverage, totalCoverage) {
+function generateSummary(currentCoverage, baseCoverage, totalCoverage) {
   let summary = `### Overall Coverage: ${totalCoverage.toFixed(2)}%\n\n`;
 
   if (baseCoverage) {
-    const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
-    const diff = totalCoverage - baseTotalCoverage;
-    const emoji = diff > 0 ? '⬆️' : diff < 0 ? '⬇️' : '➖';
-    const sign = diff > 0 ? '+' : '';
+    const commonProjects = Object.keys(currentCoverage || {}).filter(
+      (projectName) => projectName in baseCoverage
+    );
 
-    summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${baseTotalCoverage.toFixed(2)}%)\n\n`;
+    if (commonProjects.length > 0) {
+      const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
+      const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
+      const diff = comparableCurrent - comparableBase;
+      const emoji = diff >= 0.01 ? '⬆️' : diff <= -0.01 ? '⬇️' : '➖';
+      const sign = diff > 0 ? '+' : '';
+
+      summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${comparableBase.toFixed(2)}%`;
+      if (commonProjects.length < Object.keys(currentCoverage).length) {
+        summary += `, compared across ${commonProjects.length} project(s) present in both runs`;
+      }
+      summary += ')\n\n';
+    }
   }
 
   return summary;
@@ -31138,25 +31151,6 @@ function formatPercentage(value) {
     return 'N/A';
   }
   return `${value.toFixed(2)}%`;
-}
-
-/**
- * Calculate total coverage from coverage data
- * @param {Object} coverage - Coverage data
- * @returns {number} Total coverage percentage
- */
-function calculateTotalCoverage(coverage) {
-  let totalLines = 0;
-  let coveredLines = 0;
-
-  for (const [, projectData] of Object.entries(coverage)) {
-    if (projectData.summary) {
-      totalLines += projectData.summary.lines?.total || 0;
-      coveredLines += projectData.summary.lines?.covered || 0;
-    }
-  }
-
-  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
 }
 
 module.exports = {

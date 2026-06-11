@@ -1,4 +1,4 @@
-const { compareCoverage } = require('./coverage-parser');
+const { compareCoverage, calculateTotalCoverage } = require('./coverage-parser');
 
 /**
  * Generate a markdown coverage report
@@ -43,21 +43,32 @@ function generateReport(options) {
 
 /**
  * Generate coverage summary
- * @param {Object} _currentCoverage - Current coverage data (unused)
+ * @param {Object} currentCoverage - Current coverage data
  * @param {Object} baseCoverage - Base coverage data
  * @param {number} totalCoverage - Total coverage percentage
  * @returns {string} Summary markdown
  */
-function generateSummary(_currentCoverage, baseCoverage, totalCoverage) {
+function generateSummary(currentCoverage, baseCoverage, totalCoverage) {
   let summary = `### Overall Coverage: ${totalCoverage.toFixed(2)}%\n\n`;
 
   if (baseCoverage) {
-    const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
-    const diff = totalCoverage - baseTotalCoverage;
-    const emoji = diff > 0 ? '⬆️' : diff < 0 ? '⬇️' : '➖';
-    const sign = diff > 0 ? '+' : '';
+    const commonProjects = Object.keys(currentCoverage || {}).filter(
+      (projectName) => projectName in baseCoverage
+    );
 
-    summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${baseTotalCoverage.toFixed(2)}%)\n\n`;
+    if (commonProjects.length > 0) {
+      const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
+      const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
+      const diff = comparableCurrent - comparableBase;
+      const emoji = diff >= 0.01 ? '⬆️' : diff <= -0.01 ? '⬇️' : '➖';
+      const sign = diff > 0 ? '+' : '';
+
+      summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${comparableBase.toFixed(2)}%`;
+      if (commonProjects.length < Object.keys(currentCoverage).length) {
+        summary += `, compared across ${commonProjects.length} project(s) present in both runs`;
+      }
+      summary += ')\n\n';
+    }
   }
 
   return summary;
@@ -448,25 +459,6 @@ function formatPercentage(value) {
     return 'N/A';
   }
   return `${value.toFixed(2)}%`;
-}
-
-/**
- * Calculate total coverage from coverage data
- * @param {Object} coverage - Coverage data
- * @returns {number} Total coverage percentage
- */
-function calculateTotalCoverage(coverage) {
-  let totalLines = 0;
-  let coveredLines = 0;
-
-  for (const [, projectData] of Object.entries(coverage)) {
-    if (projectData.summary) {
-      totalLines += projectData.summary.lines?.total || 0;
-      coveredLines += projectData.summary.lines?.covered || 0;
-    }
-  }
-
-  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
 }
 
 module.exports = {
