@@ -12,8 +12,10 @@ A Node.js GitHub Action that reports code coverage for monorepos. It recursively
 npm test                                      # run all Jest tests
 npx jest src/__tests__/coverage-parser.test.js  # run a single test file
 npx jest -t "<test name>"                     # run tests matching a name
-npm run lint                                  # ESLint over src/**/*.js
-npm run format                                # Prettier write over src/**/*.js
+npm run lint                                  # Biome lint over src/**/*.js
+npm run lint:fix                              # Biome lint with auto-fix
+npm run format                                # Biome format write over src/**/*.js
+npm run format:check                          # Biome format check (no writes)
 npm run build                                 # ncc bundle src/index.js -> dist/
 ```
 
@@ -28,10 +30,10 @@ npm run build                                 # ncc bundle src/index.js -> dist/
 All source lives in `src/`, orchestrated by `src/index.js` (the action entry point):
 
 1. `index.js` reads action inputs via `@actions/core`. If `no-coverage-ran` is true, it posts a warning comment and exits early.
-2. `coverage-parser.js` globs for `**/coverage-summary.json` under the coverage folder, extracts each file's `total` key, and keys projects by relative path (e.g., `apps/frontend`). `parseCoverage()` runs again on the base folder when base comparison is enabled. `compareCoverage()` diffs current vs base and intentionally ignores projects that exist only in base (removed projects are not shown).
+2. `coverage-parser.js` globs for `**/coverage-summary.json` under the coverage folder (node_modules excluded), extracts each file's `total` key, and keys projects by relative path (e.g., `apps/frontend`). Files that do not contain valid numeric `total.lines` data are skipped with a warning. `parseCoverage()` runs again on the base folder when base comparison is enabled. `compareCoverage()` diffs current vs base and intentionally ignores projects that exist only in base (removed projects are not shown).
 3. `index.js` computes total coverage as a weighted average over raw line counts across projects (not a mean of percentages), then sets the outputs `total-coverage`, `coverage-changed`, and `coverage-diff`.
 4. On `pull_request` events, `report-generator.js` renders the markdown report (summary, comparison tables with trend indicators, per-project breakdown).
-5. `comment-handler.js` wraps octokit (`@actions/github`): it finds an existing comment by matching `## <commentTitle>` plus `user.type === 'Bot'` and updates it, otherwise creates a new one. This is what makes the comment stable across pushes to the same PR.
+5. `comment-handler.js` wraps octokit (`@actions/github`): `upsertComment` is used by both the report path and the no-coverage warning path. It embeds a hidden HTML marker (`<!-- monorepo-code-coverage-reporter:<title> -->`) in each comment it creates. On subsequent runs it finds the existing comment by scanning ALL PR comments with full pagination, matching on the marker first; it falls back to legacy title-plus-Bot matching for comments created by older action versions. Works with the default `GITHUB_TOKEN`, GitHub Apps, and PATs.
 
 Tests live in `src/__tests__/`.
 

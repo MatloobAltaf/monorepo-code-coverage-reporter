@@ -10,7 +10,7 @@ Add the action to your workflow:
 
 ```yaml
 - name: Generate coverage report
-  uses: your-username/monorepo-code-coverage-reporter@v1
+  uses: MatloobAltaf/monorepo-code-coverage-reporter@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
@@ -19,20 +19,20 @@ Add the action to your workflow:
 
 ### 2. Set Required Permissions
 
-Ensure your workflow has the necessary permissions:
+Comments are only posted on `pull_request` events. Ensure your workflow job has write access to pull requests:
 
 ```yaml
 jobs:
   coverage:
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write # Required for commenting on PRs
-      contents: read # Required for reading repository content
+      pull-requests: write
+      contents: read
 ```
 
 ### 3. Prepare Coverage Data
 
-Organize your coverage files in a nested directory structure:
+Organize your coverage files in a nested directory structure, one `coverage-summary.json` per project:
 
 ```
 coverage/
@@ -52,6 +52,9 @@ coverage/
 
 ```yaml
 - name: Download base coverage
+  # Note: this step only finds an artifact that a previous run on the base branch
+  # uploaded. Pair it with upload steps that run on pushes to your default branch;
+  # see examples/complete-workflow.yml for the matching upload configuration.
   uses: dawidd6/action-download-artifact@v6
   continue-on-error: true
   with:
@@ -61,47 +64,64 @@ coverage/
     path: ./coverage-base
 
 - name: Generate coverage report
-  uses: your-username/monorepo-code-coverage-reporter@v1
+  uses: MatloobAltaf/monorepo-code-coverage-reporter@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
     coverage-base-folder: './coverage-base'
-
-    hide-unchanged: true
+    hide-unchanged: 'true'
 ```
 
 ### With Custom Configuration
 
 ```yaml
 - name: Generate coverage report
-  uses: your-username/monorepo-code-coverage-reporter@v1
+  uses: MatloobAltaf/monorepo-code-coverage-reporter@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     coverage-folder: './coverage'
     coverage-base-folder: './coverage-base'
-
-    comment-title: '📊 Test Coverage Report'
-    hide-coverage-reports: false
-    hide-unchanged: true
-    update-comment: true
-    include-summary: true
+    comment-title: 'Test Coverage Report'
+    hide-coverage-reports: 'false'
+    hide-unchanged: 'true'
+    update-comment: 'true'
+    include-summary: 'true'
 ```
+
+## Inputs Reference
+
+| Input                   | Description                                                      | Required | Default               |
+| ----------------------- | ---------------------------------------------------------------- | -------- | --------------------- |
+| `github-token`          | GitHub token for posting comments                                | Yes      | `${{ github.token }}` |
+| `coverage-folder`       | Path to coverage folder with nested directories                  | Yes      | `'./coverage'`        |
+| `coverage-base-folder`  | Path to base coverage folder for comparison                      | No       | `''`                  |
+| `no-coverage-ran`       | Set to `'true'` if no coverage was generated                     | No       | `'false'`             |
+| `hide-coverage-reports` | Hide the detailed coverage table in comments                     | No       | `'false'`             |
+| `hide-unchanged`        | Hide projects with no significant coverage change                | No       | `'false'`             |
+| `comment-title`         | Title for the coverage comment                                   | No       | `'Coverage Report'`   |
+| `update-comment`        | Update the existing comment instead of creating a new one        | No       | `'true'`              |
+| `include-summary`       | Include the overall coverage summary line in the comment         | No       | `'true'`              |
+| `detailed-coverage`     | Show detailed coverage breakdown with individual app/lib metrics | No       | `'true'`              |
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **No coverage files found**
-   - Verify your coverage files are in the expected locations
-   - Check that files are named correctly (`coverage-summary.json`)
+   - Verify your coverage files are named `coverage-summary.json` and placed under subdirectories of the configured `coverage-folder`
+   - The action only discovers `coverage-summary.json` files
+   - If the folder contains no parseable files, the action fails with `No coverage data found in <folder>`. For builds that legitimately produce no coverage, set `no-coverage-ran: 'true'` to post a warning comment instead of failing
 
 2. **Permission denied errors**
-   - Ensure your workflow has `pull-requests: write` permission
+   - Ensure your workflow job has `pull-requests: write` permission
    - Check that the GitHub token has sufficient permissions
 
 3. **Coverage parsing errors**
-   - Verify JSON files are properly formatted
-   - Check the action logs for specific parsing errors
+   - Verify JSON files contain a valid `total` field with numeric values
+   - Files that cannot be parsed are skipped with a warning in the action log
+
+4. **`coverage-changed` / `coverage-diff` outputs not set**
+   - These are only set when a valid `coverage-base-folder` was provided and at least one project appears in both runs
 
 ### Getting Help
 
@@ -109,7 +129,7 @@ If you encounter issues:
 
 1. Check the [troubleshooting section](README.md#troubleshooting) in the README
 2. Review the [examples](examples/) directory
-3. Open an issue on GitHub with:
+3. Open an issue on [GitHub](https://github.com/MatloobAltaf/monorepo-code-coverage-reporter/issues) with:
    - Your workflow configuration
    - Error logs
    - Sample coverage files (if possible)
@@ -118,8 +138,7 @@ If you encounter issues:
 
 - [ ] Add the action to your workflow
 - [ ] Add required permissions to your job
-- [ ] Verify coverage file structure
+- [ ] Verify coverage file structure (one `coverage-summary.json` per project)
 - [ ] Test the action on a pull request
 - [ ] Configure base coverage comparison (optional)
-
 - [ ] Customize report appearance (optional)
