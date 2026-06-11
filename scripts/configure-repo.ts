@@ -214,11 +214,8 @@ const ensureBranch = async (branch: string): Promise<"existed" | "created"> => {
 };
 
 const requiredStatusChecks = [
-	{ context: "build" },
-	{ context: "lint" },
-	{ context: "check-title" },
-	{ context: "Web Unit Tests" },
-	{ context: "Server Unit & Integration Tests" },
+	{ context: "test" },
+	{ context: "test-action" },
 ];
 
 const buildRuleset = (branch: "develop" | "main") => ({
