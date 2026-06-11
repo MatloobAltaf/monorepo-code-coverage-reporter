@@ -30279,9 +30279,8 @@ async function findExistingComment(octokit, context, commentTitle) {
     });
 
     // Look for comments that start with the comment title
-    const existingComment = comments.data.find(comment => 
-      comment.body.includes(`## ${commentTitle}`) && 
-      comment.user.type === 'Bot'
+    const existingComment = comments.data.find(
+      (comment) => comment.body.includes(`## ${commentTitle}`) && comment.user.type === 'Bot'
     );
 
     if (existingComment) {
@@ -30315,9 +30314,8 @@ async function deleteOldComments(octokit, context, commentTitle) {
       issue_number: context.payload.pull_request.number
     });
 
-    const coverageComments = comments.data.filter(comment => 
-      comment.body.includes(`## ${commentTitle}`) && 
-      comment.user.type === 'Bot'
+    const coverageComments = comments.data.filter(
+      (comment) => comment.body.includes(`## ${commentTitle}`) && comment.user.type === 'Bot'
     );
 
     let deletedCount = 0;
@@ -30521,12 +30519,12 @@ function generateReport(options) {
 
 /**
  * Generate coverage summary
- * @param {Object} currentCoverage - Current coverage data
+ * @param {Object} _currentCoverage - Current coverage data (unused)
  * @param {Object} baseCoverage - Base coverage data
  * @param {number} totalCoverage - Total coverage percentage
  * @returns {string} Summary markdown
  */
-function generateSummary(currentCoverage, baseCoverage, totalCoverage) {
+function generateSummary(_currentCoverage, baseCoverage, totalCoverage) {
   let summary = `### Overall Coverage: ${totalCoverage.toFixed(2)}%\n\n`;
 
   if (baseCoverage) {
@@ -30715,11 +30713,11 @@ function formatDiffCell(current, diff) {
 /**
  * Format an enhanced diff cell with detailed coverage info
  * @param {Object} current - Current coverage data
- * @param {Object} base - Base coverage data
+ * @param {Object} _base - Base coverage data (unused)
  * @param {number} diff - Difference
  * @returns {string} Enhanced formatted cell
  */
-function formatEnhancedDiffCell(current, base, diff) {
+function formatEnhancedDiffCell(current, _base, diff) {
   const currentPct = current?.pct || 0;
   const currentCovered = current?.covered || 0;
   const currentTotal = current?.total || 0;
@@ -30922,7 +30920,7 @@ function generateIndividualProjectDetails(coverage) {
  * @returns {string} Formatted percentage
  */
 function formatPercentage(value) {
-  if (typeof value !== 'number' || isNaN(value)) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
     return 'N/A';
   }
   return `${value.toFixed(2)}%`;
@@ -40854,7 +40852,7 @@ async function run() {
             const stat = fs.statSync(fullPath);
             if (stat.isDirectory()) {
               core.info(`${prefix}📁 ${item}/`);
-              listFilesRecursively(fullPath, prefix + '  ');
+              listFilesRecursively(fullPath, `${prefix}  `);
             } else {
               core.info(`${prefix}📄 ${item}`);
             }

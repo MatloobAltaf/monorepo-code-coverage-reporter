@@ -266,7 +266,7 @@ describe('coverage-parser', () => {
       // Verify that each project has the expected structure
       expect(result['apps/frontend']).toHaveProperty('summary');
       expect(result['apps/backend']).toHaveProperty('summary');
-      expect(result['library']).toHaveProperty('summary');
+      expect(result.library).toHaveProperty('summary');
       expect(result['xyz/abc/qw']).toHaveProperty('summary');
     });
   });

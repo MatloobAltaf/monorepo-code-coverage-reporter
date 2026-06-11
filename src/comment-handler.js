@@ -72,9 +72,8 @@ async function findExistingComment(octokit, context, commentTitle) {
     });
 
     // Look for comments that start with the comment title
-    const existingComment = comments.data.find(comment => 
-      comment.body.includes(`## ${commentTitle}`) && 
-      comment.user.type === 'Bot'
+    const existingComment = comments.data.find(
+      (comment) => comment.body.includes(`## ${commentTitle}`) && comment.user.type === 'Bot'
     );
 
     if (existingComment) {
@@ -108,9 +107,8 @@ async function deleteOldComments(octokit, context, commentTitle) {
       issue_number: context.payload.pull_request.number
     });
 
-    const coverageComments = comments.data.filter(comment => 
-      comment.body.includes(`## ${commentTitle}`) && 
-      comment.user.type === 'Bot'
+    const coverageComments = comments.data.filter(
+      (comment) => comment.body.includes(`## ${commentTitle}`) && comment.user.type === 'Bot'
     );
 
     let deletedCount = 0;

@@ -43,12 +43,12 @@ function generateReport(options) {
 
 /**
  * Generate coverage summary
- * @param {Object} currentCoverage - Current coverage data
+ * @param {Object} _currentCoverage - Current coverage data (unused)
  * @param {Object} baseCoverage - Base coverage data
  * @param {number} totalCoverage - Total coverage percentage
  * @returns {string} Summary markdown
  */
-function generateSummary(currentCoverage, baseCoverage, totalCoverage) {
+function generateSummary(_currentCoverage, baseCoverage, totalCoverage) {
   let summary = `### Overall Coverage: ${totalCoverage.toFixed(2)}%\n\n`;
 
   if (baseCoverage) {
@@ -237,11 +237,11 @@ function formatDiffCell(current, diff) {
 /**
  * Format an enhanced diff cell with detailed coverage info
  * @param {Object} current - Current coverage data
- * @param {Object} base - Base coverage data
+ * @param {Object} _base - Base coverage data (unused)
  * @param {number} diff - Difference
  * @returns {string} Enhanced formatted cell
  */
-function formatEnhancedDiffCell(current, base, diff) {
+function formatEnhancedDiffCell(current, _base, diff) {
   const currentPct = current?.pct || 0;
   const currentCovered = current?.covered || 0;
   const currentTotal = current?.total || 0;
@@ -444,7 +444,7 @@ function generateIndividualProjectDetails(coverage) {
  * @returns {string} Formatted percentage
  */
 function formatPercentage(value) {
-  if (typeof value !== 'number' || isNaN(value)) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
     return 'N/A';
   }
   return `${value.toFixed(2)}%`;

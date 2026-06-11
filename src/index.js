@@ -48,7 +48,7 @@ async function run() {
             const stat = fs.statSync(fullPath);
             if (stat.isDirectory()) {
               core.info(`${prefix}📁 ${item}/`);
-              listFilesRecursively(fullPath, prefix + '  ');
+              listFilesRecursively(fullPath, `${prefix}  `);
             } else {
               core.info(`${prefix}📄 ${item}`);
             }
