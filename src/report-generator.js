@@ -1,4 +1,4 @@
-const { compareCoverage } = require('./coverage-parser');
+const { compareCoverage, calculateTotalCoverage } = require('./coverage-parser');
 
 /**
  * Generate a markdown coverage report
@@ -52,12 +52,23 @@ function generateSummary(currentCoverage, baseCoverage, totalCoverage) {
   let summary = `### Overall Coverage: ${totalCoverage.toFixed(2)}%\n\n`;
 
   if (baseCoverage) {
-    const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
-    const diff = totalCoverage - baseTotalCoverage;
-    const emoji = diff > 0 ? '⬆️' : diff < 0 ? '⬇️' : '➖';
-    const sign = diff > 0 ? '+' : '';
+    const commonProjects = Object.keys(currentCoverage || {}).filter(
+      (projectName) => projectName in baseCoverage
+    );
 
-    summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${baseTotalCoverage.toFixed(2)}%)\n\n`;
+    if (commonProjects.length > 0) {
+      const comparableCurrent = calculateTotalCoverage(currentCoverage, commonProjects);
+      const comparableBase = calculateTotalCoverage(baseCoverage, commonProjects);
+      const diff = comparableCurrent - comparableBase;
+      const emoji = diff >= 0.01 ? '⬆️' : diff <= -0.01 ? '⬇️' : '➖';
+      const sign = diff > 0 ? '+' : '';
+
+      summary += `**Coverage Change:** ${emoji} ${sign}${diff.toFixed(2)}% (from ${comparableBase.toFixed(2)}%`;
+      if (commonProjects.length < Object.keys(currentCoverage || {}).length) {
+        summary += `, compared across ${commonProjects.length} project(s) present in both runs`;
+      }
+      summary += ')\n\n';
+    }
   }
 
   return summary;
@@ -186,19 +197,25 @@ function generateEnhancedProjectRow(projectName, projectDiff) {
   let linesCell, functionsCell, branchesCell, statementsCell, statusCell;
 
   switch (status) {
-    case 'added':
+    case 'added': {
+      const addedStatements = current.statements || current.lines;
       linesCell = `${formatPercentage(current.lines?.pct)} 🔹<br>*${current.lines?.covered || 0}/${current.lines?.total || 0}*`;
       functionsCell = `${formatPercentage(current.functions?.pct)} 🔹<br>*${current.functions?.covered || 0}/${current.functions?.total || 0}*`;
       branchesCell = `${formatPercentage(current.branches?.pct)} 🔹<br>*${current.branches?.covered || 0}/${current.branches?.total || 0}*`;
-      statementsCell = `${formatPercentage(current.statements?.pct)} 🔹<br>*${current.statements?.covered || 0}/${current.statements?.total || 0}*`;
+      statementsCell = `${formatPercentage(addedStatements?.pct)} 🔹<br>*${addedStatements?.covered || 0}/${addedStatements?.total || 0}*`;
       statusCell = '➕ Added';
       break;
+    }
 
     case 'modified': {
       linesCell = formatEnhancedDiffCell(current.lines, base.lines, diff.lines);
       functionsCell = formatEnhancedDiffCell(current.functions, base.functions, diff.functions);
       branchesCell = formatEnhancedDiffCell(current.branches, base.branches, diff.branches);
-      statementsCell = formatEnhancedDiffCell(current.statements, base.statements, diff.statements); // Use statements diff for statements
+      statementsCell = formatEnhancedDiffCell(
+        current.statements || current.lines,
+        base.statements || base.lines,
+        diff.statements
+      );
 
       // Show overall coverage trend based on lines coverage (most comprehensive metric)
       if (Math.abs(diff.lines) >= 0.01) {
@@ -237,11 +254,11 @@ function formatDiffCell(current, diff) {
 /**
  * Format an enhanced diff cell with detailed coverage info
  * @param {Object} current - Current coverage data
- * @param {Object} base - Base coverage data
+ * @param {Object} _base - Base coverage data (unused)
  * @param {number} diff - Difference
  * @returns {string} Enhanced formatted cell
  */
-function formatEnhancedDiffCell(current, base, diff) {
+function formatEnhancedDiffCell(current, _base, diff) {
   const currentPct = current?.pct || 0;
   const currentCovered = current?.covered || 0;
   const currentTotal = current?.total || 0;
@@ -339,6 +356,15 @@ function generateProjectBreakdown(projectName, projectDiff) {
           breakdown += `- **Branches:** ${formatPercentage(current.branches?.pct)} (${sign}${diff.branches.toFixed(2)}%) ${emoji}\n`;
           breakdown += `  - Current: ${current.branches?.covered || 0}/${current.branches?.total || 0}\n`;
           breakdown += `  - Previous: ${base.branches?.covered || 0}/${base.branches?.total || 0}\n`;
+        }
+        if (Math.abs(diff.statements || 0) >= 0.01) {
+          const currentStatements = current.statements || current.lines;
+          const baseStatements = base.statements || base.lines;
+          const emoji = diff.statements > 0 ? '⬆️' : '⬇️';
+          const sign = diff.statements > 0 ? '+' : '';
+          breakdown += `- **Statements:** ${formatPercentage(currentStatements?.pct)} (${sign}${diff.statements.toFixed(2)}%) ${emoji}\n`;
+          breakdown += `  - Current: ${currentStatements?.covered || 0}/${currentStatements?.total || 0}\n`;
+          breakdown += `  - Previous: ${baseStatements?.covered || 0}/${baseStatements?.total || 0}\n`;
         }
       } else {
         breakdown += '➖ **No significant changes**\n';
@@ -444,29 +470,10 @@ function generateIndividualProjectDetails(coverage) {
  * @returns {string} Formatted percentage
  */
 function formatPercentage(value) {
-  if (typeof value !== 'number' || isNaN(value)) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
     return 'N/A';
   }
   return `${value.toFixed(2)}%`;
-}
-
-/**
- * Calculate total coverage from coverage data
- * @param {Object} coverage - Coverage data
- * @returns {number} Total coverage percentage
- */
-function calculateTotalCoverage(coverage) {
-  let totalLines = 0;
-  let coveredLines = 0;
-
-  for (const [, projectData] of Object.entries(coverage)) {
-    if (projectData.summary) {
-      totalLines += projectData.summary.lines?.total || 0;
-      coveredLines += projectData.summary.lines?.covered || 0;
-    }
-  }
-
-  return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
 }
 
 module.exports = {

@@ -51,11 +51,6 @@ inputs:
     required: false
     default: 'true'
 
-  working-directory:
-    description: 'Working directory for the action'
-    required: false
-    default: './'
-
   detailed-coverage:
     description: 'Show detailed coverage breakdown with individual app/lib metrics'
     required: false

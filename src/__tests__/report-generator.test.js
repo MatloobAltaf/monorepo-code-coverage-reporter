@@ -1,10 +1,12 @@
 const {
   generateReport,
+  generateSummary,
   formatPercentage,
   generateEnhancedProjectRow,
   generateDetailedBreakdown,
   generateIndividualProjectDetails
 } = require('../report-generator');
+const { calculateTotalCoverage } = require('../coverage-parser');
 
 describe('report-generator', () => {
   describe('formatPercentage', () => {
@@ -100,7 +102,7 @@ describe('report-generator', () => {
 
       expect(result).toContain('## Coverage Report');
       expect(result).toContain('### Overall Coverage: 85.00%');
-      expect(result).not.toContain('### Coverage by Project');
+      expect(result).not.toContain('### 🔄 Individual App/Library Coverage');
     });
 
     it('should hide summary when requested', () => {
@@ -157,7 +159,7 @@ describe('report-generator', () => {
 
       expect(result).toContain('🔄 Individual App/Library Coverage Changes');
       expect(result).not.toContain('*85/100*');
-      expect(result).not.toContain('📋 Detailed Coverage Breakdown');
+      expect(result).not.toContain('📑 Detailed Coverage Breakdown');
     });
   });
 
@@ -273,6 +275,51 @@ describe('report-generator', () => {
     });
   });
 
+  describe('generateSummary', () => {
+    const proj = (total, covered) => ({
+      summary: { lines: { total, covered, pct: (covered / total) * 100 } }
+    });
+
+    it('compares totals over the intersection of projects only', () => {
+      const current = { 'apps/a': proj(100, 90) };
+      const base = { 'apps/a': proj(100, 80), 'apps/b': proj(1000, 100) };
+
+      const result = generateSummary(current, base, 90);
+
+      expect(result).toContain('**Coverage Change:** ⬆️ +10.00% (from 80.00%');
+      expect(result).not.toContain('18.00%');
+    });
+
+    it('notes when the comparison covers a subset of current projects', () => {
+      const current = { 'apps/a': proj(100, 90), 'apps/new': proj(50, 25) };
+      const base = { 'apps/a': proj(100, 80) };
+
+      const result = generateSummary(current, base, 76.67);
+
+      expect(result).toContain('compared across 1 project(s) present in both runs');
+    });
+
+    it('omits the change line when no projects overlap', () => {
+      const current = { 'apps/new': proj(50, 25) };
+      const base = { 'apps/old': proj(100, 80) };
+
+      const result = generateSummary(current, base, 50);
+
+      expect(result).toContain('### Overall Coverage: 50.00%');
+      expect(result).not.toContain('**Coverage Change:**');
+    });
+
+    it('shows the unchanged emoji for sub-epsilon diffs', () => {
+      const current = { 'apps/a': proj(300000, 100001) };
+      const base = { 'apps/a': proj(300000, 100000) };
+
+      const result = generateSummary(current, base, 33.33);
+
+      expect(result).toContain('➖');
+      expect(result).not.toContain('⬆️');
+    });
+  });
+
   describe('Sample Directory Structure Test', () => {
     it('should create sample directory structure and generate comprehensive comment', () => {
       // Create sample current coverage data with the specified directory structure
@@ -373,21 +420,7 @@ describe('report-generator', () => {
         }
       };
 
-      // Calculate total coverage
-      const calculateTotalCoverage = (coverage) => {
-        let totalLines = 0;
-        let coveredLines = 0;
-        for (const [, projectData] of Object.entries(coverage)) {
-          if (projectData.summary) {
-            totalLines += projectData.summary.lines?.total || 0;
-            coveredLines += projectData.summary.lines?.covered || 0;
-          }
-        }
-        return totalLines > 0 ? (coveredLines / totalLines) * 100 : 0;
-      };
-
       const currentTotalCoverage = calculateTotalCoverage(currentCoverage);
-      const baseTotalCoverage = calculateTotalCoverage(baseCoverage);
 
       // Generate the comprehensive report
       const options = {
@@ -402,11 +435,6 @@ describe('report-generator', () => {
       };
 
       const generatedComment = generateReport(options);
-
-      // Log the generated comment to see the output
-      console.log('\n=== GENERATED COVERAGE COMMENT ===');
-      console.log(generatedComment);
-      console.log('=== END GENERATED COVERAGE COMMENT ===\n');
 
       // Verify the comment contains expected content
       expect(generatedComment).toContain('## 📊 Coverage Report - frontend Project');
@@ -459,13 +487,73 @@ describe('report-generator', () => {
       expect(generatedComment).toContain('(+5.00%)');
       expect(generatedComment).toContain('(+10.00%)');
       expect(generatedComment).toContain('(+5.00%)');
+    });
+  });
 
-      console.log('✅ Sample directory structure test completed successfully!');
-      console.log(`📈 Current Total Coverage: ${currentTotalCoverage.toFixed(2)}%`);
-      console.log(`📊 Base Total Coverage: ${baseTotalCoverage.toFixed(2)}%`);
-      console.log(
-        `📈 Coverage Improvement: +${(currentTotalCoverage - baseTotalCoverage).toFixed(2)}%`
-      );
+  describe('statements fallback', () => {
+    it('falls back to lines data when statements are missing in enhanced rows', () => {
+      const projectDiff = {
+        status: 'modified',
+        current: {
+          lines: { pct: 85, covered: 85, total: 100 },
+          functions: { pct: 90, covered: 18, total: 20 },
+          branches: { pct: 80, covered: 40, total: 50 }
+        },
+        base: {
+          lines: { pct: 80, covered: 80, total: 100 },
+          functions: { pct: 85, covered: 17, total: 20 },
+          branches: { pct: 75, covered: 37, total: 50 }
+        },
+        diff: { lines: 5, functions: 5, branches: 5, statements: 5 }
+      };
+
+      const result = generateEnhancedProjectRow('apps/frontend', projectDiff);
+
+      expect(result).not.toContain('*0/0*');
+      expect(result).toContain('*85/100*');
+    });
+
+    it('falls back to lines data for added projects without statements', () => {
+      const projectDiff = {
+        status: 'added',
+        current: {
+          lines: { pct: 85, covered: 85, total: 100 },
+          functions: { pct: 90, covered: 18, total: 20 },
+          branches: { pct: 80, covered: 40, total: 50 }
+        }
+      };
+
+      const result = generateEnhancedProjectRow('apps/frontend', projectDiff);
+
+      expect(result).not.toContain('N/A');
+    });
+  });
+
+  describe('statements-only changes', () => {
+    it('renders a statements bullet instead of an empty changes stanza', () => {
+      const diff = {
+        'apps/frontend': {
+          status: 'modified',
+          current: {
+            lines: { pct: 85, covered: 85, total: 100 },
+            functions: { pct: 90, covered: 18, total: 20 },
+            branches: { pct: 80, covered: 40, total: 50 },
+            statements: { pct: 90, covered: 90, total: 100 }
+          },
+          base: {
+            lines: { pct: 85, covered: 85, total: 100 },
+            functions: { pct: 90, covered: 18, total: 20 },
+            branches: { pct: 80, covered: 40, total: 50 },
+            statements: { pct: 80, covered: 80, total: 100 }
+          },
+          diff: { lines: 0, functions: 0, branches: 0, statements: 10 }
+        }
+      };
+
+      const result = generateDetailedBreakdown(diff, false);
+
+      expect(result).toContain('🔄 **Coverage changes detected**');
+      expect(result).toContain('**Statements:** 90.00% (+10.00%) ⬆️');
     });
   });
 });

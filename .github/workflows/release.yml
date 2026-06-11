@@ -5,18 +5,18 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -31,27 +31,37 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Run linter
+        run: npm run lint
+
       - name: Build action
         run: npm run build
 
-      - name: Package action
+      - name: Verify dist is up to date for this tag
         run: |
-          # Configure git
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-
-          # Remove dist from gitignore temporarily and add built files
-          sed -i '/^dist\/$/d' .gitignore
-          git add dist/ .gitignore
-
-          # Commit if there are changes
-          if ! git diff --staged --quiet; then
-            git commit -m "Package action for ${{ github.ref_name }}"
-            git push origin HEAD:main
+          if [ -n "$(git status --porcelain dist)" ]; then
+            echo "::error::dist/ is stale for this tag. Run 'npm run build', commit dist/, then re-create the tag."
+            git status --porcelain dist
+            exit 1
           fi
 
+      - name: Update major version tag
+        run: |
+          MAJOR=$(echo "$GITHUB_REF_NAME" | grep -oE '^v[0-9]+' || true)
+          if [ -z "$MAJOR" ]; then
+            echo "::error::could not derive a vN major version from tag $GITHUB_REF_NAME"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "$MAJOR" "$GITHUB_REF_NAME"
+          git push -f origin "$MAJOR"
+
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
