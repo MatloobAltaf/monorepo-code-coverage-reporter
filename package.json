@@ -1,6 +1,6 @@
 {
   "name": "monorepo-code-coverage-reporter",
-  "version": "1.2.0",
+  "version": "1.8.0",
   "description": "A comprehensive coverage reporter for monorepos",
   "main": "dist/index.js",
   "scripts": {

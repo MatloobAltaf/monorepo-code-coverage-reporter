@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8] - 2026-06-11
+
+### Fixed
+
+- Duplicate PR comments: the no-coverage-ran warning path now updates the existing comment instead of always creating a new one (honors update-comment)
+- Comment lookup now paginates through all PR comments instead of only the first 30
+- Comments are identified by a hidden HTML marker, so matching works with PAT/App tokens and is immune to other comments quoting the report title; comments from older versions are still found via a legacy fallback
+- Comment-listing API failures now fail the run instead of silently creating a duplicate comment
+- Base comparison (coverage-diff/coverage-changed outputs and the report's Coverage Change line) is computed over projects present in BOTH runs instead of comparing mismatched project sets
+- A base coverage folder with no valid data is no longer treated as a 0% baseline
+- Malformed or partial coverage-summary.json files are skipped with a warning instead of rendering N/A rows in the report
+- Coverage folder paths containing glob special characters now work; a coverage-summary.json at the folder root is keyed as `root`; files under node_modules are ignored
+- The coverage-changed output uses a 0.01 percentage-point threshold instead of exact float comparison
+- The Statements column consistently falls back to lines data when a summary lacks statements; statements-only changes now appear in the detailed breakdown
+- Projects with 0% line coverage are no longer logged as N/A
+
+### Changed
+
+- Release workflow now verifies that the committed dist/ bundle is fresh for the tag and maintains a floating major version tag (v1), instead of committing a rebuilt bundle to main after tagging
+- Linting and formatting moved to Biome (ESLint and Prettier removed)
+- Boolean inputs honor their action.yml defaults when unset and log a warning for unrecognized values
+- Removed the noisy recursive file listing from the action log
+- CI hardening: formatting check, smoke-test output assertions, fork-safe permissions, concurrency cancellation, job timeouts, and PR coverage for the develop branch
+- package.json version is now kept in sync with release tags (starting with this release)
+
+### Removed
+
+- The unused working-directory input
+- The dead deleteOldComments helper
+
+### Added
+
+- CONTRIBUTING.md, issue and PR templates, CODEOWNERS, Dependabot configuration, and .nvmrc
+- CI status badge and a documentation accuracy overhaul (README, INSTALLATION, examples)
+
 ## [1.7] - 2025-08-06
 
 ### Removed

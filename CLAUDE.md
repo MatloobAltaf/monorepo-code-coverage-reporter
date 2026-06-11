@@ -39,6 +39,6 @@ Tests live in `src/__tests__/`.
 
 ## Releases and versioning
 
-- CHANGELOG.md follows Keep a Changelog; recent tags use a single-integer minor like `v1.7`. The `version` field in package.json is not kept in sync with tags.
-- Releasing: push a `v*` tag. `.github/workflows/release.yml` tests, builds, commits `dist/` to main, and creates a GitHub Release.
+- CHANGELOG.md follows Keep a Changelog; recent tags use a single-integer minor like `v1.8`. The `version` field in package.json is kept in sync with release tags as of v1.8.
+- Releasing: push a `v*` tag. `.github/workflows/release.yml` re-runs tests and lint, verifies the committed `dist/` is fresh for the tag (fails if stale), force-updates the floating major tag (e.g. `v1`), and creates a GitHub Release.
 - Keep CHANGELOG.md updated when shipping user-visible changes (this is the established convention; see recent commit history).
