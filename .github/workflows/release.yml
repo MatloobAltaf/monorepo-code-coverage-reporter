@@ -65,6 +65,9 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
+          # In the body below, ${{ '${{' }} emits a literal "${{" so the
+          # published notes show the ${{ secrets.GITHUB_TOKEN }} placeholder
+          # instead of interpolating the runtime token into the release page.
           body: |
             ## Changes
 
@@ -75,7 +78,7 @@ jobs:
             ```yaml
             - uses: MatloobAltaf/monorepo-code-coverage-reporter@${{ github.ref_name }}
               with:
-                github-token: ${{ secrets.GITHUB_TOKEN }}
+                github-token: ${{ '${{' }} secrets.GITHUB_TOKEN }}
                 coverage-folder: './coverage'
             ```
           draft: false
